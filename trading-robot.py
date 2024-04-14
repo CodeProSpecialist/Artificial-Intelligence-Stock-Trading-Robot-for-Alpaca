@@ -11,9 +11,9 @@ import yfinance as yf
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from ta import add_all_ta_features
-from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.models import Sequential, load_model
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 # Configure logging to write to a file
 logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
@@ -25,6 +25,8 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 
 # Initialize the Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
+
+global symbols_to_buy, symbol
 
 # Define global variable
 symbols_to_buy = []
@@ -42,8 +44,9 @@ def read_stock_symbols_list():
 
 # Function to fetch historical data
 def fetch_data():
-    global symbols_to_buy
     try:
+        time.sleep(1)
+        print("Currently downloading stock price data.....")
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365 * 1)  # One year of data
         data = yf.download(symbols_to_buy, start=start_date, end=end_date.strftime('%Y-%m-%d'))
@@ -54,6 +57,7 @@ def fetch_data():
         return data
     except Exception as e:
         logging.error(f"Error fetching data: {str(e)}")
+        print(f"Error getting data for {str(e)}")
         time.sleep(60)
         return None
 
@@ -87,22 +91,48 @@ def create_sequences(data, window_size):
 # Function to build and train the LSTM model
 def build_and_train_lstm_model(X_train, y_train, window_size):
     try:
-        model = Sequential([
-            LSTM(64, activation='relu', return_sequences=True, input_shape=(window_size, X_train.shape[2])),
-            Dropout(0.2),
-            LSTM(64, activation='relu'),
-            Dropout(0.2),
-            Dense(32, activation='relu'),
-            Dense(1)
-        ])
-        model.compile(optimizer='adam', loss='mse')
+        class LSTMModel(nn.Module):
+            def __init__(self, input_size, hidden_size, num_layers, output_size):
+                super(LSTMModel, self).__init__()
+                self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+                self.fc = nn.Linear(hidden_size, output_size)
 
-        # Early stopping
-        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+            def forward(self, x):
+                out, _ = self.lstm(x)
+                out = self.fc(out[:, -1, :])  # Get output from last time step
+                return out
+
+        # Define parameters
+        input_size = X_train.shape[2]
+        hidden_size = 64
+        num_layers = 2
+        output_size = 1
+
+        # Initialize model
+        model = LSTMModel(input_size, hidden_size, num_layers, output_size)
+
+        # Define loss function and optimizer
+        criterion = nn.MSELoss()
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+        # Convert data to PyTorch tensors
+        X_train_tensor = torch.tensor(X_train).float()
+        y_train_tensor = torch.tensor(y_train).float()
 
         # Train the model
-        model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2, callbacks=[early_stopping],
-                  verbose=1)
+        num_epochs = 50
+        for epoch in range(num_epochs):
+            # Forward pass
+            outputs = model(X_train_tensor)
+            loss = criterion(outputs, y_train_tensor)
+
+            # Backward pass and optimization
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Print loss
+            print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
 
         return model
     except Exception as e:
@@ -184,48 +214,19 @@ def does_model_exist(model_name):
 # Function to load LSTM model
 def load_lstm_model(model_path):
     try:
-        return load_model(model_path)
+        return torch.load(model_path)
     except Exception as e:
         logging.error(f"Error loading LSTM model: {str(e)}")
-        return None
-
-
-# Function to load RandomForest model
-def load_rf_model(model_path):
-    try:
-        with open(model_path, 'rb') as f:
-            return pickle.load(f)
-    except Exception as e:
-        logging.error(f"Error loading RandomForest model: {str(e)}")
         return None
 
 
 # Function to save model
 def save_model(model, model_path):
     try:
-        model.save(model_path)
+        torch.save(model, model_path)
     except Exception as e:
         logging.error(f"Error saving model: {str(e)}")
         time.sleep(60)
-
-
-# Function to create LSTM model
-def create_lstm_model(input_shape):
-    try:
-        model = Sequential([
-            LSTM(64, activation='relu', return_sequences=True, input_shape=input_shape),
-            Dropout(0.2),
-            LSTM(64, activation='relu'),
-            Dropout(0.2),
-            Dense(32, activation='relu'),
-            Dense(1)
-        ])
-        model.compile(optimizer='adam', loss='mse')
-        return model
-    except Exception as e:
-        logging.error(f"Error creating LSTM model: {str(e)}")
-        time.sleep(60)
-        return None
 
 
 # Function to get account information
@@ -245,20 +246,23 @@ def get_account_info():
 # Main loop
 while True:
     try:
-        years_ago = 1
+        print("Starting main loop...")
 
         # Fetch data
+        print("Fetching data...")
         data = fetch_data()
         if data is None:
             continue
         data = data.values  # Convert to numpy array
 
         # Get account information
+        print("Fetching account information...")
         cash_available, day_trade_count, positions = get_account_info()
         if cash_available is None or day_trade_count is None or positions is None:
             continue
 
         # Calculate moving averages for stock prices, RSI, and MACD
+        print("Calculating moving averages...")
         price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
         if price_avg is None or rsi_avg is None or macd_avg is None:
             continue
@@ -280,81 +284,52 @@ while True:
         # Print current day trade number out of 3 in 5 days
         print(f"Current day trade count: {day_trade_count}/3 in 5 days")
 
-        if 1 == 1:  # debug code to run 24 hours, 7 days
-            # if is_trading_hours():
+        if is_trading_hours():
             print("Trading hours. Looking for stocks to trade.....")
-            # Fetch data
-            data = fetch_data()
-            if data is None:
-                continue
-            data = data.values  # Convert to numpy array
-
-            # Get account information
-            cash_available, day_trade_count, positions = get_account_info()
-            if cash_available is None or day_trade_count is None or positions is None:
-                continue
-
-            # Calculate moving averages for stock prices, RSI, and MACD
-            price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
-            if price_avg is None or rsi_avg is None or macd_avg is None:
-                continue
 
             # Preprocess data
+            print("Preprocessing data...")
             scaled_data = preprocess_data(data)
 
             # Create sequences for LSTM
+            print("Creating sequences...")
             X, y = create_sequences(scaled_data, window_size)
             if X is None or y is None:
                 continue
 
             # Split data into training and testing sets
+            print("Splitting data...")
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
             # Create or load LSTM model
-            lstm_model_path = 'lstm_model.h5'
+            lstm_model_path = 'lstm_model.pth'
+            print("Creating or loading LSTM model...")
             if does_model_exist(lstm_model_path):
                 lstm_model = load_lstm_model(lstm_model_path)
             else:
-                lstm_model = create_lstm_model((X_train.shape[1], X_train.shape[2]))
+                lstm_model = build_and_train_lstm_model(X_train, y_train, window_size)
                 if lstm_model is not None:
-                    build_and_train_lstm_model(X_train, y_train, window_size)
                     save_model(lstm_model, lstm_model_path)
 
             # Predict using LSTM model
-            predictions_lstm = lstm_model.predict(X_test)
+            print("Predicting using LSTM model...")
+            with torch.no_grad():
+                outputs = lstm_model(torch.tensor(X_test).float())
 
-            # Predict using RandomForest model
-            predictions_rf = rf_model.predict(X_test_rf)
-
-            # Ensemble predictions
-            ensemble_predictions = (predictions_lstm + predictions_rf) / 2
-
-            # Execute buy orders based on ensemble predictions and available cash
+            # Execute buy orders based on predictions and available cash
+            print("Executing buy orders...")
             for symbol in symbols_to_buy:
                 current_price = data[-1, symbols_to_buy.index(symbol) * 6 + 3]  # Close price is at every 6th index
                 rsi = data[-1, symbols_to_buy.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
                 macd = data[-1, symbols_to_buy.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
-                if (ensemble_predictions[-1] < current_price * 0.998 and  # Buy if price drops more than 0.2%
-                        cash_available >= current_price and
-                        rsi < rsi_avg[-1] and
-                        macd < 0):
-                    quantity = int(cash_available // current_price)  # Buy as many shares as possible
-                    cash_available = submit_buy_order(symbol, quantity, cash_available)
+                # Perform your buy logic here using the LSTM model predictions
 
             # Check day trade count and sell positions if less than 3 and at a higher price
-            if day_trade_count < 3:
-                for symbol, quantity in positions.items():
-                    purchase_price = float(positions.avg_entry_price)
-                    current_price = data[-1, symbols_to_buy.index(symbol) * 6 + 3]  # Close price is at every 6th index
-                    rsi = data[-1, symbols_to_buy.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
-                    macd = data[-1, symbols_to_buy.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
-                    if (symbol in symbols_to_buy and
-                            current_price > purchase_price * 1.005 and  # Sell if price is 0.5% or greater than purchase price
-                            rsi > rsi_avg[-1] and
-                            macd > 0):
-                        cash_available = submit_sell_order(symbol, quantity, cash_available)
+            print("Checking day trade count and selling positions...")
+            # Perform your sell logic here based on day trade count and other conditions
 
-        print("Not trading hours - waiting...")
+        else:
+            print("Not trading hours - waiting...")
 
         print("This program runs Monday - Friday, 9:30am - 4:00pm.")
 
