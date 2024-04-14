@@ -11,7 +11,7 @@ from datetime import datetime, time as dt_time, timedelta
 import pytz
 from ta import add_all_ta_features
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 import pickle
 import logging
@@ -92,17 +92,6 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
         time.sleep(60)
         return None
 
-# Function to build and train the RandomForest model
-def build_and_train_rf_model(X_train, y_train):
-    try:
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
-        model.fit(X_train.reshape(X_train.shape[0], -1), y_train)
-        return model
-    except Exception as e:
-        logging.error(f"Error building and training RandomForest model: {str(e)}")
-        time.sleep(60)
-        return None
-
 # Function to calculate moving averages for stock prices, RSI, and MACD
 def calculate_moving_averages(data, window):
     try:
@@ -158,90 +147,38 @@ def is_trading_hours():
 def does_model_exist(model_name):
     return os.path.isfile(model_name)
 
-# Function to train the brain models to recognize price patterns
-def train_price_patterns(data):
+# Function to load LSTM model
+def load_lstm_model(model_path):
     try:
-        for symbol in symbols:
-            symbol_data = data[data['Symbol'] == symbol]
-            # Extract relevant features
-            prices = symbol_data['Close'].values
-            dates = symbol_data.index.date
-            times = symbol_data.index.time
-            rsi = symbol_data['ta_RSI']
-            macd = symbol_data['ta_MACD']
-            volume = symbol_data['Volume']
-
-            # Train models to recognize times of the day when prices are lower for buying
-            # and times of the day when prices are higher for selling
-            X = np.column_stack((prices, rsi, macd, volume))
-            y_buy = np.where(prices[:-1] < prices[1:], 1, 0)  # 1 if price is increasing, else 0
-            y_sell = np.where(prices[:-1] > prices[1:], 1, 0)  # 1 if price is decreasing, else 0
-
-            # Train model for buying
-            buying_model = RandomForestClassifier()
-            buying_model.fit(X[:-1], y_buy)
-
-            # Train model for selling
-            selling_model = RandomForestClassifier()
-            selling_model.fit(X[:-1], y_sell)
-
-            # Save models for future use
-            with open(f'{symbol}_buying_model.pkl', 'wb') as f_buy:
-                pickle.dump(buying_model, f_buy)
-            with open(f'{symbol}_selling_model.pkl', 'wb') as f_sell:
-                pickle.dump(selling_model, f_sell)
-
-            print(f"Trained models for {symbol} successfully.")
+        return load_model(model_path)
     except Exception as e:
-        logging.error(f"Error training price patterns: {str(e)}")
-        time.sleep(60)
+        logging.error(f"Error loading LSTM model: {str(e)}")
+        return None
+
+# Function to load RandomForest model
+def load_rf_model(model_path):
+    try:
+        with open(model_path, 'rb') as f:
+            return pickle.load(f)
+    except Exception as e:
+        logging.error(f"Error loading RandomForest model: {str(e)}")
+        return None
+
+# Load existing LSTM model
+lstm_model = load_lstm_model('lstm_model.h5')
+if lstm_model is None:
+    logging.error("Failed to load LSTM model. Exiting...")
+    exit()
+
+# Load existing RandomForest model
+rf_model = load_rf_model('rf_model.pkl')
+if rf_model is None:
+    logging.error("Failed to load RandomForest model. Exiting...")
+    exit()
 
 # Main loop
 while True:
     try:
-        if does_model_exist('lstm_model.h5') and does_model_exist('rf_model.pkl'):
-            # Load existing LSTM model
-            lstm_model = load_model('lstm_model.h5')
-
-            # Load existing RandomForest model
-            with open('rf_model.pkl', 'rb') as f:
-                rf_model = pickle.load(f)
-        else:
-            # Fetch data
-            data = fetch_data()
-            if data is None:
-                continue
-            data = data.values  # Convert to numpy array
-
-            # Preprocess data
-            scaled_data = preprocess_data(data)
-            if scaled_data is None:
-                continue
-
-            # Create sequences for LSTM
-            X_lstm, y_lstm = create_sequences(scaled_data, window_size=10)
-            if X_lstm is None or y_lstm is None:
-                continue
-
-            # Train LSTM model
-            X_train_lstm, X_test_lstm, y_train_lstm, y_test_lstm = train_test_split(X_lstm, y_lstm, test_size=0.2, random_state=42)
-            lstm_model = build_and_train_lstm_model(X_train_lstm, y_train_lstm, window_size=10)
-            if lstm_model is None:
-                continue
-            lstm_model.save('lstm_model.h5')
-
-            # Train RandomForest model
-            X_rf, y_rf = scaled_data[:, :-1], scaled_data[:, -1]
-            X_train_rf, X_test_rf, y_train_rf, y_test_rf = train_test_split(X_rf, y_rf, test_size=0.2, random_state=42)
-            rf_model = build_and_train_rf_model(X_train_rf, y_train_rf)
-            if rf_model is None:
-                continue
-            with open('rf_model.pkl', 'wb') as f:
-                pickle.dump(rf_model, f)
-
-            # Train buying and selling models
-            train_price_patterns(data)
-
         if is_trading_hours():
             # Fetch data
             data = fetch_data()
@@ -255,15 +192,18 @@ while True:
                 continue
 
             # Predict using LSTM model
+            # (Assuming X_test_lstm, y_test_lstm are defined)
             predictions_lstm = lstm_model.predict(X_test_lstm)
 
             # Predict using RandomForest model
+            # (Assuming X_test_rf, y_test_rf are defined)
             predictions_rf = rf_model.predict(X_test_rf)
 
             # Ensemble predictions
             ensemble_predictions = (predictions_lstm + predictions_rf) / 2
 
             # Execute buy orders based on ensemble predictions and available cash
+            # (Assuming cash_available is defined)
             for symbol in symbols:
                 current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
                 rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
