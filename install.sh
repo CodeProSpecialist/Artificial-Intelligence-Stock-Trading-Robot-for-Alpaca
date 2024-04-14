@@ -1,8 +1,13 @@
-#!/bin/sh
+#!/bin/bash
 
-# Install Python3 and pip3 if not already installed
+# Update package list
 sudo apt update
-sudo apt install python3 python3-pip -y
 
-# Install required Python packages using pip3
-pip3 install yfinance numpy tensorflow alpaca-trade-api
+# Install Python 3
+sudo apt install -y python3
+
+# Install pip3
+sudo apt install -y python3-pip
+
+# Install Python packages
+pip3 install yfinance numpy scikit-learn tensorflow alpaca-trade-api ta
