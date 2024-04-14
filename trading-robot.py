@@ -7,12 +7,11 @@ from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
 import alpaca_trade_api as tradeapi
 import time
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, timedelta
 import pytz
 from ta import add_all_ta_features
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error
 import pickle
 import logging
 
@@ -110,6 +109,7 @@ def calculate_moving_averages(data, window):
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, cash_available):
     try:
+        current_price = api.get_last_trade(symbol).price
         api.submit_order(
             symbol=symbol,
             qty=quantity,
@@ -128,6 +128,7 @@ def submit_buy_order(symbol, quantity, cash_available):
 # Function to submit sell order
 def submit_sell_order(symbol, quantity, cash_available):
     try:
+        current_price = api.get_last_trade(symbol).price
         api.submit_order(
             symbol=symbol,
             qty=quantity,
@@ -172,30 +173,32 @@ def load_rf_model(model_path):
         logging.error(f"Error loading RandomForest model: {str(e)}")
         return None
 
-# Function to get account information
-def get_account_info():
+# Function to save model
+def save_model(model, model_path):
     try:
-        account_info = api.get_account()
-        cash_available = float(account_info.cash)
-        day_trade_count = account_info.daytrade_count
-        positions = {position.symbol: float(position.qty) for position in api.list_positions()}
-        return cash_available, day_trade_count, positions
+        model.save(model_path)
     except Exception as e:
-        logging.error(f"Error getting account information: {str(e)}")
+        logging.error(f"Error saving model: {str(e)}")
         time.sleep(60)
-        return None, None, None
 
-# Load existing LSTM model
-lstm_model = load_lstm_model('lstm_model.h5')
-if lstm_model is None:
-    logging.error("Failed to load LSTM model. Exiting...")
-    exit()
+# Function to create LSTM model
+def create_lstm_model(input_shape):
+    try:
+        model = Sequential([
+            LSTM(64, activation='relu', return_sequences=True, input_shape=input_shape),
+            Dropout(0.2),
+            LSTM(64, activation='relu'),
+            Dropout(0.2),
+            Dense(32, activation='relu'),
+            Dense(1)
+        ])
+        model.compile(optimizer='adam', loss='mse')
+        return model
+    except Exception as e:
+        logging.error(f"Error creating LSTM model: {str(e)}")
+        time.sleep(60)
+        return None
 
-# Load existing RandomForest model
-rf_model = load_rf_model('rf_model.pkl')
-if rf_model is None:
-    logging.error("Failed to load RandomForest model. Exiting...")
-    exit()
 
 # Main loop
 while True:
@@ -217,12 +220,31 @@ while True:
             if price_avg is None or rsi_avg is None or macd_avg is None:
                 continue
 
+            # Preprocess data
+            scaled_data = preprocess_data(data)
+
+            # Create sequences for LSTM
+            X, y = create_sequences(scaled_data, window_size)
+            if X is None or y is None:
+                continue
+
+            # Split data into training and testing sets
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+            # Create or load LSTM model
+            lstm_model_path = 'lstm_model.h5'
+            if does_model_exist(lstm_model_path):
+                lstm_model = load_lstm_model(lstm_model_path)
+            else:
+                lstm_model = create_lstm_model((X_train.shape[1], X_train.shape[2]))
+                if lstm_model is not None:
+                    build_and_train_lstm_model(X_train, y_train, window_size)
+                    save_model(lstm_model, lstm_model_path)
+
             # Predict using LSTM model
-            # (Assuming X_test_lstm, y_test_lstm are defined)
-            predictions_lstm = lstm_model.predict(X_test_lstm)
+            predictions_lstm = lstm_model.predict(X_test)
 
             # Predict using RandomForest model
-            # (Assuming X_test_rf, y_test_rf are defined)
             predictions_rf = rf_model.predict(X_test_rf)
 
             # Ensemble predictions
