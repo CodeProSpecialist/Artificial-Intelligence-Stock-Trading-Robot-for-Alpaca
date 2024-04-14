@@ -44,47 +44,51 @@ def read_stock_symbols_list():
     symbols_to_buy = symbols
     return symbols_to_buy
 
-# Function to fetch historical data
+
 def fetch_data():
     try:
+        global symbols_to_buy
+
+        # Ensure symbols_to_buy is not empty
+        if not symbols_to_buy:
+            print("No symbols to fetch data for.")
+            return None
+
         time.sleep(1)
         print("Currently downloading stock price data.....")
+
+        # Define start and end dates
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365 * 1)  # One year of data
-        symbols = read_stock_symbols_list()  # Fetch stock symbols
-        if not symbols:
-            print("No stock symbols found.")
+
+        # Fetch data for each symbol and concatenate
+        data = None
+        for symbol in symbols_to_buy:
+            try:
+                symbol_data = yf.download(symbol, start=start_date, end=end_date)
+                if data is None:
+                    data = symbol_data
+                else:
+                    data = pd.concat([data, symbol_data], axis=1)
+                time.sleep(1)  # Sleep for 1 second between fetching data for each symbol
+            except Exception as e:
+                logging.error(f"Error fetching data for {symbol}: {str(e)}")
+                print(f"Error getting data for {symbol}: {str(e)}")
+                continue
+
+        if data is None:
+            print("No data fetched for any symbol.")
             return None
-        data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
-        if data.empty:
-            print("No data available for the specified symbols.")
-            return None
-        # Ensure data is not empty
-        if len(data) < 1:
-            print("Insufficient data for technical analysis features.")
-            return None
-        # Drop any NaN values
-        data = data.dropna()
-        data.reset_index(inplace=True)
-        # Check if data has enough rows for technical analysis features
-        if len(data) < 200:
-            print("Insufficient data for technical analysis features.")
-            return None
-        # Calculate technical analysis features
+
+        # Add technical indicators
         data = add_all_ta_features(data, open='Open', high='High', low='Low', close='Close', volume='Volume',
                                    colprefix='ta_')
-        # Flatten the data array
-        data = data.values.flatten()
         return data
-    except KeyboardInterrupt:
-        print("KeyboardInterrupt detected. Exiting...")
-        sys.exit(0)
     except Exception as e:
         logging.error(f"Error fetching data: {str(e)}")
-        print(f"Error getting data for {str(e)}")
+        print(f"Error fetching data: {str(e)}")
         time.sleep(60)
         return None
-
 
 
 # Function to preprocess data
