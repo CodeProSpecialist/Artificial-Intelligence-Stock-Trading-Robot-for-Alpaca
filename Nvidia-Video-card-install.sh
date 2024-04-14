@@ -9,9 +9,13 @@ sudo apt update
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/Release.gpg
 sudo apt-key add Release.gpg
 
+sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/7fa2af80.pub
+
+
 # Add NVIDIA CUDA repository keyring
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
 sudo dpkg -i cuda-keyring_1.1-1_all.deb
+
 
 # Add NVIDIA CUDA repository
 sudo sh -c 'echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64 /" > /etc/apt/sources.list.d/cuda.list'
