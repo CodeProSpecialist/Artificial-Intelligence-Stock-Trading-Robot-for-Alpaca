@@ -141,16 +141,19 @@ def get_account_info():
 # Main loop
 while True:
     try:
+        print("Fetching and calculating technical indicators...")
         symbols_to_buy = ['AGQ', 'UGL']  # Example symbols to buy
         window_size = 10  # Example window size for LSTM
 
         # Fetch and calculate technical indicators
         data = []
         for symbol in symbols_to_buy:
+            print(f"Fetching data for symbol: {symbol}")
             technical_data = calculate_technical_indicators(symbol)
             data.append(technical_data)
             time.sleep(1)
         if data:
+            print("Technical indicators fetched successfully.")
             combined_data = np.concatenate(data, axis=0)
             scaled_data, scaler = preprocess_data(combined_data)
             X, y = create_sequences(scaled_data, window_size)
@@ -158,9 +161,12 @@ while True:
             lstm_model = build_and_train_lstm_model(X_train, y_train, window_size)
 
             # Make predictions
+            print("Making predictions...")
             lstm_predictions = lstm_model(torch.tensor(X_test, dtype=torch.float32))  # Remove .unsqueeze(0)
+            print("Predictions made successfully.")
 
             # Execute buy/sell orders based on predictions and account information
+            print("Executing buy/sell orders...")
             cash_available, day_trade_count, positions = get_account_info()
             for symbol in symbols_to_buy:
                 index = symbols_to_buy.index(symbol)
@@ -176,18 +182,23 @@ while True:
 
                 # Compare the selected prediction with the current price
                 if selected_prediction < current_price_tensor and cash_available >= current_price:
+                    print(f"Buying {symbol}...")
                     quantity = int(cash_available // current_price)  # Buy as many shares as possible
                     cash_available = submit_buy_order(symbol, quantity, cash_available)
+                    print(f"Buy order for {symbol} executed successfully.")
                 if day_trade_count < 3:
                     purchase_price = positions[symbol]
                     if current_price > purchase_price * 1.005:  # Sell if price is 0.5% or greater than purchase price
+                        print(f"Selling {symbol}...")
                         quantity = int(positions[symbol])  # Sell all shares
                         cash_available = submit_sell_order(symbol, quantity, cash_available)
+                        print(f"Sell order for {symbol} executed successfully.")
         else:
-            print("No data fetched.")
+            print("No data fetched. Retrying in 60 seconds...")
             time.sleep(60)
 
     except Exception as e:
         logging.error(f"Error occurred: {str(e)}")
         logging.info("Restarting in 60 seconds...")
+        print("Error occurred. Restarting in 60 seconds...")
         time.sleep(60)
