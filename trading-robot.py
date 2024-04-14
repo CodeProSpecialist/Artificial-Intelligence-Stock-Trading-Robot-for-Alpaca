@@ -108,7 +108,7 @@ def calculate_moving_averages(data, window):
         return None, None, None
 
 # Function to submit buy order
-def submit_buy_order(symbol, quantity):
+def submit_buy_order(symbol, quantity, cash_available):
     try:
         api.submit_order(
             symbol=symbol,
@@ -117,12 +117,16 @@ def submit_buy_order(symbol, quantity):
             type='market',
             time_in_force='gtc'
         )
+        # Update cash available after buying stocks
+        cash_available -= quantity * current_price
+        return cash_available
     except Exception as e:
         logging.error(f"Error submitting buy order: {str(e)}")
         time.sleep(60)
+        return cash_available
 
 # Function to submit sell order
-def submit_sell_order(symbol, quantity):
+def submit_sell_order(symbol, quantity, cash_available):
     try:
         api.submit_order(
             symbol=symbol,
@@ -131,9 +135,13 @@ def submit_sell_order(symbol, quantity):
             type='market',
             time_in_force='gtc'
         )
+        # Update cash available after selling stocks
+        cash_available += quantity * current_price
+        return cash_available
     except Exception as e:
         logging.error(f"Error submitting sell order: {str(e)}")
         time.sleep(60)
+        return cash_available
 
 # Function to check if current time is within trading hours
 def is_trading_hours():
@@ -164,6 +172,19 @@ def load_rf_model(model_path):
         logging.error(f"Error loading RandomForest model: {str(e)}")
         return None
 
+# Function to get account information
+def get_account_info():
+    try:
+        account_info = api.get_account()
+        cash_available = float(account_info.cash)
+        day_trade_count = account_info.daytrade_count
+        positions = {position.symbol: float(position.qty) for position in api.list_positions()}
+        return cash_available, day_trade_count, positions
+    except Exception as e:
+        logging.error(f"Error getting account information: {str(e)}")
+        time.sleep(60)
+        return None, None, None
+
 # Load existing LSTM model
 lstm_model = load_lstm_model('lstm_model.h5')
 if lstm_model is None:
@@ -186,6 +207,11 @@ while True:
                 continue
             data = data.values  # Convert to numpy array
 
+            # Get account information
+            cash_available, day_trade_count, positions = get_account_info()
+            if cash_available is None or day_trade_count is None or positions is None:
+                continue
+
             # Calculate moving averages for stock prices, RSI, and MACD
             price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
             if price_avg is None or rsi_avg is None or macd_avg is None:
@@ -203,7 +229,6 @@ while True:
             ensemble_predictions = (predictions_lstm + predictions_rf) / 2
 
             # Execute buy orders based on ensemble predictions and available cash
-            # (Assuming cash_available is defined)
             for symbol in symbols:
                 current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
                 rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
@@ -213,16 +238,11 @@ while True:
                     rsi < rsi_avg[-1] and 
                     macd < 0):
                     quantity = int(cash_available // current_price)  # Buy as many shares as possible
-                    submit_buy_order(symbol, quantity)
-                    cash_available -= quantity * current_price
+                    cash_available = submit_buy_order(symbol, quantity, cash_available)
 
             # Check day trade count and sell positions if less than 3 and at a higher price
-            account_info = api.get_account()
-            day_trade_count = account_info.daytrade_count
             if day_trade_count < 3:
-                positions = api.list_positions()
-                for position in positions:
-                    symbol = position.symbol
+                for symbol, quantity in positions.items():
                     purchase_price = float(position.avg_entry_price)
                     current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
                     rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
@@ -231,8 +251,7 @@ while True:
                         current_price > purchase_price * 1.005 and  # Sell if price is 0.5% or greater than purchase price
                         rsi > rsi_avg[-1] and 
                         macd > 0):
-                        quantity = int(position.qty)
-                        submit_sell_order(symbol, quantity)
+                        cash_available = submit_sell_order(symbol, quantity, cash_available)
 
         # Sleep for some time before checking again
         time.sleep(60)  # Sleep for 1 minute before checking again
