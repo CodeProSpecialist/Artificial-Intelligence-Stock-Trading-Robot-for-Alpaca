@@ -5,19 +5,22 @@
 # Update package list
 sudo apt update
 
-apt-key del "7fa2af80" \
-&& export this_distro="$(cat /etc/os-release | grep '^ID=' | awk -F'=' '{print $2}')" \
-&& export this_version="$(cat /etc/os-release | grep '^VERSION_ID=' | awk -F'=' '{print $2}' | sed 's/[^0-9]*//g')" \
-&& apt-key adv --fetch-keys "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/${this_version}3bf863cc.pub"
-
-
 # Add NVIDIA CUDA repository key
-wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.1-1_all.deb
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/Release.gpg
+sudo apt-key add Release.gpg
 
+# Add NVIDIA CUDA repository keyring
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
 sudo dpkg -i cuda-keyring_1.1-1_all.deb
 
 # Add NVIDIA CUDA repository
-sudo sh -c 'echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch /" > /etc/apt/sources.list.d/cuda.list'
+sudo sh -c 'echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64 /" > /etc/apt/sources.list.d/cuda.list'
+
+# Update package lists
+sudo apt-get update
+
+# Clean up
+rm Release.gpg cuda-keyring_1.1-1_all.deb
 
 # Update package lists
 sudo apt-get update
