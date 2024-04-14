@@ -13,7 +13,7 @@ sudo apt install -y python3-pip libhdf5-dev
 sudo mv /usr/lib/python3.11/EXTERNALLY-MANAGED /usr/lib/python3.11/EXTERNALLY-MANAGED.old
 
 # Install Python packages
-pip3 install yfinance numpy scikit-learn tensorflow alpaca-trade-api ta TensorRT
+pip3 install yfinance numpy scikit-learn alpaca-trade-api ta torch
 
 # ignore errors about not finding TensorRT to run this code without NVidia video cards on
 # every Linux device like a Raspberry Pi.
