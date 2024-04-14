@@ -34,7 +34,7 @@ rm cuda-keyring_1.0-1_all.deb
 
 sudo apt update
 
-sudo apt-get install cuda-toolkit libcudnn
+sudo apt-get install nvidia-cudnn nvidia-cuda-toolkit-gcc cuda-toolkit libcudnn
 
 sudo apt-get install tensorrt
 
