@@ -8,12 +8,13 @@ import alpaca_trade_api as tradeapi
 import numpy as np
 import pytz
 import yfinance as yf
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from ta import add_all_ta_features
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn
+from torch.nn import functional as F
 
 # Configure logging to write to a file
 logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
@@ -26,10 +27,11 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize the Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
-global symbols_to_buy, symbol
+global symbols_to_buy
 
 # Define global variable
 symbols_to_buy = []
+
 
 # Function to read the list of stock symbols from a text file and export as symbols_to_buy
 def read_stock_symbols_list():
@@ -41,6 +43,7 @@ def read_stock_symbols_list():
             symbols.append(line.strip())
     symbols_to_buy = symbols
     return symbols_to_buy
+
 
 # Function to fetch historical data
 def fetch_data():
@@ -91,48 +94,27 @@ def create_sequences(data, window_size):
 # Function to build and train the LSTM model
 def build_and_train_lstm_model(X_train, y_train, window_size):
     try:
-        class LSTMModel(nn.Module):
-            def __init__(self, input_size, hidden_size, num_layers, output_size):
-                super(LSTMModel, self).__init__()
-                self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-                self.fc = nn.Linear(hidden_size, output_size)
-
-            def forward(self, x):
-                out, _ = self.lstm(x)
-                out = self.fc(out[:, -1, :])  # Get output from last time step
-                return out
-
-        # Define parameters
-        input_size = X_train.shape[2]
-        hidden_size = 64
-        num_layers = 2
-        output_size = 1
-
-        # Initialize model
-        model = LSTMModel(input_size, hidden_size, num_layers, output_size)
-
-        # Define loss function and optimizer
+        model = nn.Sequential(
+            nn.LSTM(input_size=X_train.shape[2], hidden_size=64, num_layers=2, batch_first=True),
+            nn.Dropout(0.2),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1)
+        )
         criterion = nn.MSELoss()
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        epochs = 50
+        batch_size = 32
 
-        # Convert data to PyTorch tensors
-        X_train_tensor = torch.tensor(X_train).float()
-        y_train_tensor = torch.tensor(y_train).float()
-
-        # Train the model
-        num_epochs = 50
-        for epoch in range(num_epochs):
-            # Forward pass
-            outputs = model(X_train_tensor)
-            loss = criterion(outputs, y_train_tensor)
-
-            # Backward pass and optimization
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            # Print loss
-            print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+        for epoch in range(epochs):
+            for i in range(0, len(X_train), batch_size):
+                batch_X = torch.tensor(X_train[i:i + batch_size], dtype=torch.float32)
+                batch_y = torch.tensor(y_train[i:i + batch_size], dtype=torch.float32).unsqueeze(-1)
+                optimizer.zero_grad()
+                output, _ = model(batch_X)
+                loss = criterion(output.squeeze(-1), batch_y)
+                loss.backward()
+                optimizer.step()
 
         return model
     except Exception as e:
@@ -206,29 +188,6 @@ def is_trading_hours():
     return now.weekday() < 5 and trading_start <= now <= trading_end
 
 
-# Function to check if model files exist
-def does_model_exist(model_name):
-    return os.path.isfile(model_name)
-
-
-# Function to load LSTM model
-def load_lstm_model(model_path):
-    try:
-        return torch.load(model_path)
-    except Exception as e:
-        logging.error(f"Error loading LSTM model: {str(e)}")
-        return None
-
-
-# Function to save model
-def save_model(model, model_path):
-    try:
-        torch.save(model, model_path)
-    except Exception as e:
-        logging.error(f"Error saving model: {str(e)}")
-        time.sleep(60)
-
-
 # Function to get account information
 def get_account_info():
     try:
@@ -246,90 +205,76 @@ def get_account_info():
 # Main loop
 while True:
     try:
-        print("Starting main loop...")
+        years_ago = 1
 
         # Fetch data
-        print("Fetching data...")
         data = fetch_data()
         if data is None:
             continue
         data = data.values  # Convert to numpy array
 
         # Get account information
-        print("Fetching account information...")
         cash_available, day_trade_count, positions = get_account_info()
         if cash_available is None or day_trade_count is None or positions is None:
             continue
 
         # Calculate moving averages for stock prices, RSI, and MACD
-        print("Calculating moving averages...")
         price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
         if price_avg is None or rsi_avg is None or macd_avg is None:
             continue
 
-        # Print current date and time in Eastern Time Zone
-        eastern = pytz.timezone('US/Eastern')
-        current_time = datetime.now(eastern).strftime("%Y-%m-%d %H:%M")
-        print(f"Current Eastern Time: {current_time}")
+        # Preprocess data
+        scaled_data = preprocess_data(data)
 
-        # Print list of stocks being monitored to buy along with their current price
-        print("List of stocks being monitored to buy:")
+        # Create sequences for LSTM
+        X, y = create_sequences(scaled_data, window_size)
+        if X is None or y is None:
+            continue
+
+        # Split data into training and testing sets
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+        # Create and train LSTM model
+        lstm_model = build_and_train_lstm_model(X_train, y_train, window_size)
+        if lstm_model is None:
+            continue
+
+        # Create RandomForestRegressor model
+        rf_model = RandomForestRegressor()
+        rf_model.fit(X_train_rf, y_train_rf)
+
+        # Make predictions using LSTM model
+        lstm_predictions = lstm_model(X_test)
+
+        # Make predictions using RandomForestRegressor model
+        rf_predictions = rf_model.predict(X_test_rf)
+
+        # Combine predictions
+        combined_predictions = (lstm_predictions + rf_predictions) / 2
+
+        # Execute buy/sell orders based on combined predictions and available cash
         for symbol in symbols_to_buy:
             current_price = data[-1, symbols_to_buy.index(symbol) * 6 + 3]  # Close price is at every 6th index
-            print(f"{symbol}: ${current_price:.2f}")
-
-        # Print current account cash balance
-        print(f"Current account cash balance: ${cash_available:.2f}")
-
-        # Print current day trade number out of 3 in 5 days
-        print(f"Current day trade count: {day_trade_count}/3 in 5 days")
-
-        if is_trading_hours():
-            print("Trading hours. Looking for stocks to trade.....")
-
-            # Preprocess data
-            print("Preprocessing data...")
-            scaled_data = preprocess_data(data)
-
-            # Create sequences for LSTM
-            print("Creating sequences...")
-            X, y = create_sequences(scaled_data, window_size)
-            if X is None or y is None:
-                continue
-
-            # Split data into training and testing sets
-            print("Splitting data...")
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-
-            # Create or load LSTM model
-            lstm_model_path = 'lstm_model.pth'
-            print("Creating or loading LSTM model...")
-            if does_model_exist(lstm_model_path):
-                lstm_model = load_lstm_model(lstm_model_path)
-            else:
-                lstm_model = build_and_train_lstm_model(X_train, y_train, window_size)
-                if lstm_model is not None:
-                    save_model(lstm_model, lstm_model_path)
-
-            # Predict using LSTM model
-            print("Predicting using LSTM model...")
-            with torch.no_grad():
-                outputs = lstm_model(torch.tensor(X_test).float())
-
-            # Execute buy orders based on predictions and available cash
-            print("Executing buy orders...")
-            for symbol in symbols_to_buy:
-                current_price = data[-1, symbols_to_buy.index(symbol) * 6 + 3]  # Close price is at every 6th index
-                rsi = data[-1, symbols_to_buy.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
-                macd = data[-1, symbols_to_buy.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
-                # Perform your buy logic here using the LSTM model predictions
+            rsi = data[-1, symbols_to_buy.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
+            macd = data[-1, symbols_to_buy.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
+            if (combined_predictions[-1] < current_price * 0.998 and  # Buy if price drops more than 0.2%
+                    cash_available >= current_price and
+                    rsi < rsi_avg[-1] and
+                    macd < 0):
+                quantity = int(cash_available // current_price)  # Buy as many shares as possible
+                cash_available = submit_buy_order(symbol, quantity, cash_available)
 
             # Check day trade count and sell positions if less than 3 and at a higher price
-            print("Checking day trade count and selling positions...")
-            # Perform your sell logic here based on day trade count and other conditions
+            if day_trade_count < 3:
+                purchase_price = positions[symbol]  # Get the purchase price from positions dictionary
+                if (symbol in symbols_to_buy and
+                        current_price > purchase_price * 1.005 and  # Sell if price is 0.5% or greater than purchase price
+                        rsi > rsi_avg[-1] and
+                        macd > 0):
+                    quantity = int(positions[symbol])  # Sell all shares
+                    cash_available = submit_sell_order(symbol, quantity, cash_available)
 
-        else:
-            print("Not trading hours - waiting...")
+        print("Not trading hours - waiting...")
 
         print("This program runs Monday - Friday, 9:30am - 4:00pm.")
 
