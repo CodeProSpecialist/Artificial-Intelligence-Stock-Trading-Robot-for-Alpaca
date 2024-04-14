@@ -7,10 +7,9 @@ sudo add-apt-repository "deb http://developer.download.nvidia.com/compute/machin
 
 sudo apt update
 
-sudo apt-get install libnvinfer7
-
 sudo apt-get install tensorrt
 
+sudo apt-get install libnvinfer7
 
 # Install Python 3
 sudo apt install -y python3
