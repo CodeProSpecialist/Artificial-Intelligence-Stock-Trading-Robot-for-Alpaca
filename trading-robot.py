@@ -70,8 +70,6 @@ def fetch_data():
         if len(data) < 200:
             print("Insufficient data for technical analysis features.")
             return None
-        # Convert Date column to datetime
-        data['Date'] = data['Date'].apply(lambda x: datetime.strptime(x, "%Y-%m-%d"))
         # Calculate technical analysis features
         data = add_all_ta_features(data, open='Open', high='High', low='Low', close='Close', volume='Volume',
                                    colprefix='ta_')
