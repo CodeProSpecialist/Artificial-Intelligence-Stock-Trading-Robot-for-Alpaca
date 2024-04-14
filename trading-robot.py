@@ -26,6 +26,9 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize the Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
+# Define ETF symbols
+symbols_to_buy = []
+
 # Function to fetch historical data
 def fetch_data():
     try:
