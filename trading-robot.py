@@ -86,7 +86,6 @@ def fetch_data():
         return None
 
 
-
 # Function to preprocess data
 def preprocess_data(data):
     try:
