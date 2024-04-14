@@ -26,11 +26,8 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize the Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
-# Define ETF symbols
-symbols = ['AGQ', 'UGL']
-
 # Function to fetch historical data
-def fetch_data():
+def fetch_data(symbols):
     try:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365*2)  # Two years of data
@@ -199,13 +196,28 @@ def create_lstm_model(input_shape):
         time.sleep(60)
         return None
 
+# Function to read list of stocks from file
+def read_stock_list(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            return file.read().splitlines()
+    except Exception as e:
+        logging.error(f"Error reading stock list from file: {str(e)}")
+        return []
 
 # Main loop
+first_run = True
 while True:
     try:
+        # Read list of stocks from file
+        stock_list = read_stock_list('list-of-stocks-to-buy.txt')
+        if not stock_list:
+            logging.error("Empty stock list. Exiting...")
+            break
+        
         if is_trading_hours():
             # Fetch data
-            data = fetch_data()
+            data = fetch_data(stock_list)
             if data is None:
                 continue
             data = data.values  # Convert to numpy array
@@ -274,6 +286,21 @@ while True:
                         rsi > rsi_avg[-1] and 
                         macd > 0):
                         cash_available = submit_sell_order(symbol, quantity, cash_available)
+
+        # Train brain models on the first run and every day at 8:25 PM Eastern Time
+        eastern = pytz.timezone('US/Eastern')
+        now = datetime.now(eastern)
+        if first_run or (now.hour == 20 and now.minute == 25):
+            if is_trading_hours():  # Ensure training is not done during trading hours
+                continue
+            if first_run:
+                logging.info("Training brain models on first run...")
+            else:
+                logging.info("Training brain models at 8:25 PM Eastern Time...")
+
+            # Code for training brain models goes here
+
+            first_run = False
 
         # Sleep for some time before checking again
         time.sleep(60)  # Sleep for 1 minute before checking again
