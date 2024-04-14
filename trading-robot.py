@@ -1,7 +1,6 @@
 import os
 import yfinance as yf
 import numpy as np
-import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
@@ -28,45 +27,8 @@ def fetch_data():
     data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
     return data
 
-# Function to calculate technical indicators
-def calculate_technical_indicators(data):
-    # Calculate RSI
-    def calculate_rsi(data, window=14):
-        close = data['Close']
-        delta = close.diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(window=window).mean()
-        avg_loss = loss.rolling(window=window).mean()
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-
-    data['RSI'] = calculate_rsi(data)
-
-    # Calculate MACD
-    def calculate_macd(data):
-        exp12 = data['Close'].ewm(span=12, adjust=False).mean()
-        exp26 = data['Close'].ewm(span=26, adjust=False).mean()
-        macd = exp12 - exp26
-        signal = macd.ewm(span=9, adjust=False).mean()
-        return macd, signal
-
-    data['MACD'], data['Signal'] = calculate_macd(data)
-
-    # Calculate volume ratio
-    def calculate_volume_ratio(data, window=30):
-        volume = data['Volume']
-        avg_volume = volume.rolling(window=window).mean()
-        volume_ratio = volume / avg_volume
-        return volume_ratio
-
-    data['Volume_Ratio'] = calculate_volume_ratio(data)
-
-    return data
-
-# Function to prepare data for the model
-def prepare_data(data):
+# Function to preprocess data
+def preprocess_data(data):
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(data)
     return scaled_data
@@ -119,71 +81,48 @@ def submit_sell_order(symbol, quantity):
         time_in_force='gtc'
     )
 
-# Function to check if brain model exists
-def brain_model_exists():
-    return os.path.exists('brain_model.h5')
-
-# Function to save brain model
-def save_brain_model(model):
-    model.save('brain_model.h5')
-
-# Function to load brain model
-def load_brain_model():
-    return load_model('brain_model.h5')
-
 # Main loop
 while True:
-    # Check if current time is within market trading hours
-    current_time = datetime.now().time()
-    if current_time >= dt_time(9, 30) and current_time <= dt_time(16, 0):  # Assuming market trading hours are from 9:30 AM to 4:00 PM
-        # Fetch data
-        data = fetch_data()
+    # Fetch data
+    data = fetch_data()
 
-        # Calculate technical indicators
-        data = calculate_technical_indicators(data)
+    # Preprocess data
+    scaled_data = preprocess_data(data)
 
-        # Prepare data for the model
-        scaled_data = prepare_data(data.values)
-        X, y = create_sequences(scaled_data, window_size=10)
+    # Create sequences for LSTM
+    X, y = create_sequences(scaled_data, window_size=10)
 
-        # Split data into train and test sets
-        split = int(0.8 * len(X))
-        X_train, X_test = X[:split], X[split:]
-        y_train, y_test = y[:split], y[split:]
+    # Split data into train and test sets
+    split = int(0.8 * len(X))
+    X_train, X_test = X[:split], X[split:]
+    y_train, y_test = y[:split], y[split:]
 
-        # Check if brain model exists
-        if not brain_model_exists():
-            # Build and train a new brain model
-            model = build_and_train_model(X_train, y_train, window_size=10)
-            # Save the brain model
-            save_brain_model(model)
-        else:
-            # Load the existing brain model
-            model = load_brain_model()
+    # Build and train the model
+    model = build_and_train_model(X_train, y_train, window_size=10)
 
-        # Predict using the brain model
-        predictions = model.predict(X_test)
+    # Predict using the trained model
+    predictions = model.predict(X_test)
 
-        # Execute buy orders based on predictions and available cash
-        for symbol in symbols:
-            current_price = data[symbol].iloc[-1]['Close']
-            if predictions[-1] < current_price and cash_available >= current_price:
-                quantity = int(cash_available // current_price)  # Buy as many shares as possible
-                submit_buy_order(symbol, quantity)
-                cash_available -= quantity * current_price
+    # Execute buy orders based on predictions and available cash
+    for symbol in symbols:
+        current_price = data[symbol].iloc[-1]['Close']
+        if predictions[-1] < current_price and cash_available >= current_price:
+            quantity = int(cash_available // current_price)  # Buy as many shares as possible
+            submit_buy_order(symbol, quantity)
+            cash_available -= quantity * current_price
 
-        # Check day trade count and sell positions if less than 3 and at a higher price
-        account_info = api.get_account()
-        day_trade_count = account_info.daytrade_count
-        if day_trade_count < 3:
-            positions = api.list_positions()
-            for position in positions:
-                symbol = position.symbol
-                purchase_price = float(position.avg_entry_price)
-                current_price = float(position.current_price)
-                if symbol in symbols and current_price > purchase_price:
-                    quantity = int(position.qty)
-                    submit_sell_order(symbol, quantity)
+    # Check day trade count and sell positions if less than 3 and at a higher price
+    account_info = api.get_account()
+    day_trade_count = account_info.daytrade_count
+    if day_trade_count < 3:
+        positions = api.list_positions()
+        for position in positions:
+            symbol = position.symbol
+            purchase_price = float(position.avg_entry_price)
+            current_price = float(position.current_price)
+            if symbol in symbols and current_price > purchase_price:
+                quantity = int(position.qty)
+                submit_sell_order(symbol, quantity)
 
     # Sleep for some time before fetching data again
     time.sleep(60)  # Sleep for 1 minute before fetching data again
