@@ -13,7 +13,6 @@ from sklearn.preprocessing import MinMaxScaler
 import torch
 from torch import nn
 from torch.nn import functional as F
-from sklearn.ensemble import RandomForestRegressor
 
 # Configure logging to write to a file
 logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
@@ -108,34 +107,27 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
     return model
 
 
-# Function to build and train the Random Forest model
-def build_and_train_rf_model(X_train, y_train):
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
-    print("Random Forest model training complete.")
-    return model
-
 # Function to save the model
-def save_model(model, symbol, model_type):
+def save_model(model, model_type):
     model_dir = "models"
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
-    model_path = f"{model_dir}/{symbol}_{model_type}_model.pkl"
+    model_path = f"{model_dir}/{model_type}_model.pkl"
     with open(model_path, 'wb') as file:
         pickle.dump(model, file)
-    print(f"{model_type} model for {symbol} saved successfully.")
+    print(f"{model_type} model saved successfully.")
 
 # Function to load the model
-def load_model(symbol, model_type):
+def load_model(model_type):
     model_dir = "models"
-    model_path = f"{model_dir}/{symbol}_{model_type}_model.pkl"
+    model_path = f"{model_dir}/{model_type}_model.pkl"
     if os.path.exists(model_path):
         with open(model_path, 'rb') as file:
             model = pickle.load(file)
-        print(f"{model_type} model for {symbol} loaded successfully.")
+        print(f"{model_type} model loaded successfully.")
         return model
     else:
-        print(f"No saved {model_type} model found for {symbol}. Creating new model...")
+        print(f"No saved {model_type} model found. Creating new model...")
         return None
 
 # Function to submit buy order
@@ -179,13 +171,16 @@ while True:
     try:
         symbols_to_buy = ['AGQ', 'UGL']  # Example symbols to buy
         window_size = 10  # Example window size for LSTM
-        model_1_data_percentage = 0.7  # Percentage of data to use for training model 1
 
         # Print current date and time in Eastern Time
         eastern = pytz.timezone('US/Eastern')
         current_time = datetime.now(eastern)
         print(f"Starting main loop at {current_time.strftime('%Y-%m-%d %H:%M:%S')} (Eastern Time)")
 
+        # Initialize lists to store data for all symbols
+        X_all, y_all = [], []
+
+        # Process each symbol
         for symbol in symbols_to_buy:
             print(f"Processing {symbol}...")
 
@@ -199,37 +194,42 @@ while True:
             scaled_data, _ = preprocess_data(technical_data.values)
             X, y = create_sequences(scaled_data, window_size)
 
-            # Split data into two subsets for training two models
-            split_index = int(len(X) * model_1_data_percentage)
-            X_model, y_model = X[:split_index], y[:split_index]
+            # Append data to lists
+            X_all.extend(X)
+            y_all.extend(y)
 
-            # Load or create the first model (LSTM)
-            lstm_model = load_model(symbol, "lstm")
-            if lstm_model is None:
-                lstm_model = build_and_train_lstm_model(X_model, y_model, window_size)
-                save_model(lstm_model, symbol, "lstm")
+        # Convert lists to numpy arrays
+        X_all, y_all = np.array(X_all), np.array(y_all)
 
-            # Load or create the second model (Random Forest)
-            rf_model = load_model(symbol, "rf")
-            if rf_model is None:
-                rf_model = build_and_train_rf_model(X_model.reshape(-1, window_size), y_model)
-                save_model(rf_model, symbol, "rf")
+        # Train LSTM model
+        lstm_model = build_and_train_lstm_model(X_all, y_all, window_size)
+        save_model(lstm_model, "lstm")
 
-            # Make predictions using both models
-            lstm_predictions = lstm_model(torch.tensor(X[-1:], dtype=torch.float32))
-            rf_predictions = rf_model.predict(X[-1].reshape(1, -1))
+        # Make predictions and execute orders
+        for symbol in symbols_to_buy:
+            # Fetch and preprocess data for the symbol
+            technical_data = calculate_technical_indicators(symbol)
+            if technical_data is None:
+                print(f"No data fetched for {symbol}.")
+                continue
 
-            # Combine predictions from both models
-            combined_predictions = (lstm_predictions.item() + rf_predictions.item()) / 2
+            scaled_data, scaler = preprocess_data(technical_data.values)
+            X = scaled_data[-window_size:].reshape(1, window_size, -1)
 
-            # Execute buy/sell orders based on combined predictions and account information
+            # Make prediction using the trained model
+            with torch.no_grad():
+                lstm_predictions = lstm_model(torch.tensor(X, dtype=torch.float32))
+
+            # Execute buy/sell orders based on the prediction and account information
             cash_available, day_trade_count, positions = get_account_info()
             current_price = scaled_data[-1, -1]  # Last close price
             purchase_price = positions.get(symbol, 0)
 
-            print(f"Predicted price for {symbol}: {combined_predictions:.2f}")
+            predicted_price = lstm_predictions.item() * scaler.scale_[0] + scaler.min_[0]
 
-            if combined_predictions < current_price * 0.998 and cash_available >= current_price:
+            print(f"Predicted price for {symbol}: {predicted_price:.2f}")
+
+            if predicted_price < current_price * 0.998 and cash_available >= current_price:
                 quantity = int(cash_available // current_price)
                 cash_available = submit_buy_order(symbol, quantity, cash_available)
                 print(f"Bought {quantity} shares of {symbol}.")
