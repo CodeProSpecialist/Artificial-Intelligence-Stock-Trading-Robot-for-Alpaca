@@ -1,14 +1,23 @@
 #!/bin/sh
 
+# the following is for Ubuntu 22.04 LTS
+
 # Update package list
 sudo apt update
 
+apt-key del "7fa2af80" \
+&& export this_distro="$(cat /etc/os-release | grep '^ID=' | awk -F'=' '{print $2}')" \
+&& export this_version="$(cat /etc/os-release | grep '^VERSION_ID=' | awk -F'=' '{print $2}' | sed 's/[^0-9]*//g')" \
+&& apt-key adv --fetch-keys "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/${this_version}3bf863cc.pub"
+
+
 # Add NVIDIA CUDA repository key
-wget https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch/cuda-keyring_1.0-1_all.deb
-sudo dpkg -i cuda-keyring_1.0-1_all.deb
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch/cuda-keyring_1.1-1_all.deb
+
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
 
 # Add NVIDIA CUDA repository
-sudo sh -c 'echo "deb https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch /" > /etc/apt/sources.list.d/cuda.list'
+sudo sh -c 'echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$arch /" > /etc/apt/sources.list.d/cuda.list'
 
 # Update package lists
 sudo apt-get update
