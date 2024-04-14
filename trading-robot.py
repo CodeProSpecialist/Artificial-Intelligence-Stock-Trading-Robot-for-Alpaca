@@ -3,7 +3,7 @@ import os
 import pickle
 import time
 from datetime import datetime, timedelta
-
+import pandas as pd
 import alpaca_trade_api as tradeapi
 import numpy as np
 import pytz
@@ -50,8 +50,13 @@ from datetime import datetime, timedelta
 
 def fetch_data():
     print("Fetching data...")
-    print("Symbols to buy:", symbols_to_buy)
     try:
+        # Read symbols from text file
+        with open("list-of-stocks-to-buy.txt", "r") as file:
+            symbols_to_buy = [line.strip() for line in file if line.strip() and not line.startswith("#")]
+
+        print("Symbols to buy:", symbols_to_buy)
+
         data = []  # Initialize an empty list to store the fetched data for each symbol
         for symbol in symbols_to_buy:
             print(f"Currently downloading stock price data for {symbol}...")
@@ -77,7 +82,6 @@ def fetch_data():
         print(f"Error getting data for {str(e)}")
         time.sleep(60)
         return None
-
 
 # Function to preprocess data
 def preprocess_data(data):
