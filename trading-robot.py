@@ -165,9 +165,15 @@ while True:
             # Execute buy/sell orders based on predictions and account information
             cash_available, day_trade_count, positions = get_account_info()
             for symbol in symbols_to_buy:
-                current_price = data[-1, symbols_to_buy.index(symbol) * 5 + 3]  # Close price is at every 5th index
-                if lstm_predictions[-1] < current_price * 0.998 and cash_available >= current_price:
-                    quantity = int(cash_available // current_price)  # Buy as many shares as possible
+                index = -1, symbols_to_buy.index(symbol) * 5 + 3
+                current_price = data[index[0]][index[1]]
+
+                # Convert current_price * 0.998 to a PyTorch tensor
+                current_price_tensor = torch.tensor(current_price * 0.998)
+
+                # Perform the comparison operation with tensors
+                if lstm_predictions[-1] < current_price_tensor and cash_available >= current_price:
+                   quantity = int(cash_available // current_price)  # Buy as many shares as possible
                     cash_available = submit_buy_order(symbol, quantity, cash_available)
                 if day_trade_count < 3:
                     purchase_price = positions[symbol]
