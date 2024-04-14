@@ -25,8 +25,8 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize the Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
-# Function to fetch stock data and calculate technical indicators
-def fetch_and_calculate_technical_indicators(symbol, lookback_days=90):
+# Function to calculate MACD, RSI, and Volume
+def calculate_technical_indicators(symbol, lookback_days=90):
     stock_data = yf.Ticker(symbol)
     historical_data = stock_data.history(period=f'{lookback_days}d')
 
@@ -34,19 +34,22 @@ def fetch_and_calculate_technical_indicators(symbol, lookback_days=90):
     short_window = 12
     long_window = 26
     signal_window = 9
-    historical_data['macd'], historical_data['signal'], _ = talib.MACD(historical_data['Close'],
-                                                                       fastperiod=short_window,
-                                                                       slowperiod=long_window,
-                                                                       signalperiod=signal_window)
+    macd, signal, _ = talib.MACD(historical_data['Close'],
+                                  fastperiod=short_window,
+                                  slowperiod=long_window,
+                                  signalperiod=signal_window)
+    historical_data['macd'] = macd
+    historical_data['signal'] = signal
 
     # Calculate RSI
     rsi_period = 14
-    historical_data['rsi'] = talib.RSI(historical_data['Close'], timeperiod=rsi_period)
+    rsi = talib.RSI(historical_data['Close'], timeperiod=rsi_period)
+    historical_data['rsi'] = rsi
 
-    # Calculate Volume
-    historical_data['volume'] = historical_data['Volume']
+    # Volume is already present in historical_data
 
     return historical_data
+
 
 # Function to preprocess data
 def preprocess_data(data):
@@ -146,7 +149,7 @@ while True:
         # Fetch and calculate technical indicators
         data = []
         for symbol in symbols_to_buy:
-            technical_data = fetch_and_calculate_technical_indicators(symbol)
+            technical_data = calculate_technical_indicators(symbol)
             data.append(technical_data.values)
             time.sleep(1)
         if data:
