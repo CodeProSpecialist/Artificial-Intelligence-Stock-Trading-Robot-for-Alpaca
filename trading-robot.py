@@ -3,7 +3,7 @@ import yfinance as yf
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
+from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
 import alpaca_trade_api as tradeapi
 import time
@@ -29,7 +29,7 @@ symbols = ['AGQ', 'UGL']
 # Function to fetch historical data
 def fetch_data():
     end_date = datetime.now()
-    start_date = end_date - pd.DateOffset(years=2)
+    start_date = end_date - timedelta(days=365*2)  # Two years of data
     data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
     data = add_all_ta_features(data, colprefix='ta_')
     return data
@@ -74,11 +74,15 @@ def build_and_train_rf_model(X_train, y_train):
     model.fit(X_train.reshape(X_train.shape[0], -1), y_train)
     return model
 
-# Function to add noise to data
-def add_noise(data):
-    noise = np.random.normal(0, 0.01, data.shape)
-    noisy_data = data + noise
-    return noisy_data
+# Function to calculate moving averages for stock prices, RSI, and MACD
+def calculate_moving_averages(data, window):
+    close_prices = data[:, 3]  # Close prices are in the fourth column
+    rsi = data[:, -2]  # RSI is the second last column
+    macd = data[:, -1]  # MACD is the last column
+    price_avg = np.convolve(close_prices, np.ones(window)/window, mode='valid')
+    rsi_avg = np.convolve(rsi, np.ones(window)/window, mode='valid')
+    macd_avg = np.convolve(macd, np.ones(window)/window, mode='valid')
+    return price_avg, rsi_avg, macd_avg
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity):
@@ -108,7 +112,7 @@ def is_trading_hours():
     trading_end = now.replace(hour=16, minute=0, second=0)
     return now.weekday() < 5 and trading_start <= now <= trading_end
 
-# Function to check if brain model file exists
+# Function to check if model files exist
 def does_model_exist(model_name):
     return os.path.isfile(model_name)
 
@@ -124,6 +128,7 @@ while True:
     else:
         # Fetch data
         data = fetch_data()
+        data = data.values  # Convert to numpy array
 
         # Preprocess data
         scaled_data = preprocess_data(data)
@@ -144,6 +149,13 @@ while True:
             pickle.dump(rf_model, f)
 
     if is_trading_hours():
+        # Fetch data
+        data = fetch_data()
+        data = data.values  # Convert to numpy array
+
+        # Calculate moving averages for stock prices, RSI, and MACD
+        price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
+
         # Predict using LSTM model
         predictions_lstm = lstm_model.predict(X_test_lstm)
 
@@ -155,11 +167,13 @@ while True:
 
         # Execute buy orders based on ensemble predictions and available cash
         for symbol in symbols:
-            current_price = data[symbol].iloc[-1]['Close']
-            rsi = data[symbol].iloc[-1]['ta_rsi']
-            macd = data[symbol].iloc[-1]['ta_macd']
-            volume = data[symbol].iloc[-1]['Volume']
-            if ensemble_predictions[-1] < current_price and cash_available >= current_price and rsi < 30 and macd < 0 and volume < 1000000:
+            current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
+            rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
+            macd = data[-1, symbols.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
+            if (ensemble_predictions[-1] < current_price and 
+                cash_available >= current_price and 
+                rsi < rsi_avg[-1] and 
+                macd < 0):
                 quantity = int(cash_available // current_price)  # Buy as many shares as possible
                 submit_buy_order(symbol, quantity)
                 cash_available -= quantity * current_price
@@ -172,11 +186,13 @@ while True:
             for position in positions:
                 symbol = position.symbol
                 purchase_price = float(position.avg_entry_price)
-                current_price = float(position.current_price)
-                rsi = data[symbol].iloc[-1]['ta_rsi']
-                macd = data[symbol].iloc[-1]['ta_macd']
-                volume = data[symbol].iloc[-1]['Volume']
-                if symbol in symbols and current_price > purchase_price and rsi > 70 and macd > 0 and volume > 1000000:
+                current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
+                rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
+                macd = data[-1, symbols.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
+                if (symbol in symbols and 
+                    current_price > purchase_price and 
+                    rsi > rsi_avg[-1] and 
+                    macd > 0):
                     quantity = int(position.qty)
                     # Check if ensemble prediction is higher than purchase price
                     if ensemble_predictions[-1] > purchase_price:
