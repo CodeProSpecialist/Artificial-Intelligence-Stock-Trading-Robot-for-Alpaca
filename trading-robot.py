@@ -32,12 +32,15 @@ def fetch_data():
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365*2)  # Two years of data
         data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
-        data = add_all_ta_features(data, colprefix='ta_')
+        for symbol in symbols:
+            time.sleep(1)  # Sleep for 1 second between fetching data for each symbol
+        data = add_all_ta_features(data, open='Open', high='High', low='Low', close='Close', volume='Volume', colprefix='ta_')
         return data
     except Exception as e:
         logging.error(f"Error fetching data: {str(e)}")
         time.sleep(60)
         return None
+
 
 # Function to preprocess data
 def preprocess_data(data):
