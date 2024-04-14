@@ -1,19 +1,19 @@
+import logging
 import os
-import yfinance as yf
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping
-import alpaca_trade_api as tradeapi
+import pickle
 import time
 from datetime import datetime, timedelta
+
+import alpaca_trade_api as tradeapi
+import numpy as np
 import pytz
-from ta import add_all_ta_features
+import yfinance as yf
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-import pickle
-import logging
+from sklearn.preprocessing import MinMaxScaler
+from ta import add_all_ta_features
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.models import Sequential, load_model
 
 # Configure logging to write to a file
 logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
@@ -26,23 +26,31 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize the Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
-# Define ETF symbols
+# Define global variable
 symbols_to_buy = []
 
-# Read list of stocks to buy from text file
-with open("list-of-stocks-to-buy.txt", "r") as file:
-    for line in file:
-        symbols_to_buy.append(line.strip())
+# Function to read the list of stock symbols from a text file and export as symbols_to_buy
+def read_stock_symbols_list():
+    global symbols_to_buy
+    symbols = []
+    # Read list of stocks to buy from text file
+    with open("list-of-stocks-to-buy.txt", "r") as file:
+        for line in file:
+            symbols.append(line.strip())
+    symbols_to_buy = symbols
+    return symbols_to_buy
 
 # Function to fetch historical data
 def fetch_data():
+    global symbols_to_buy
     try:
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=365*2)  # Two years of data
-        data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
-        for symbol in symbols:
+        start_date = end_date - timedelta(days=365 * 2)  # Two years of data
+        data = yf.download(symbols_to_buy, start=start_date, end=end_date.strftime('%Y-%m-%d'))
+        for symbol in symbols_to_buy:
             time.sleep(1)  # Sleep for 1 second between fetching data for each symbol
-        data = add_all_ta_features(data, open='Open', high='High', low='Low', close='Close', volume='Volume', colprefix='ta_')
+        data = add_all_ta_features(data, open='Open', high='High', low='Low', close='Close', volume='Volume',
+                                   colprefix='ta_')
         return data
     except Exception as e:
         logging.error(f"Error fetching data: {str(e)}")
@@ -61,18 +69,20 @@ def preprocess_data(data):
         time.sleep(60)
         return None
 
+
 # Function to create sequences for LSTM
 def create_sequences(data, window_size):
     try:
         X, y = [], []
         for i in range(len(data) - window_size):
-            X.append(data[i:i+window_size])
-            y.append(data[i+window_size, 0])  # Predict next close price
+            X.append(data[i:i + window_size])
+            y.append(data[i + window_size, 0])  # Predict next close price
         return np.array(X), np.array(y)
     except Exception as e:
         logging.error(f"Error creating sequences: {str(e)}")
         time.sleep(60)
         return None, None
+
 
 # Function to build and train the LSTM model
 def build_and_train_lstm_model(X_train, y_train, window_size):
@@ -91,7 +101,8 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
         early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
         # Train the model
-        model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2, callbacks=[early_stopping], verbose=1)
+        model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2, callbacks=[early_stopping],
+                  verbose=1)
 
         return model
     except Exception as e:
@@ -99,20 +110,22 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
         time.sleep(60)
         return None
 
+
 # Function to calculate moving averages for stock prices, RSI, and MACD
 def calculate_moving_averages(data, window):
     try:
         close_prices = data[:, 3]  # Close prices are in the fourth column
         rsi = data[:, -2]  # RSI is the second last column
         macd = data[:, -1]  # MACD is the last column
-        price_avg = np.convolve(close_prices, np.ones(window)/window, mode='valid')
-        rsi_avg = np.convolve(rsi, np.ones(window)/window, mode='valid')
-        macd_avg = np.convolve(macd, np.ones(window)/window, mode='valid')
+        price_avg = np.convolve(close_prices, np.ones(window) / window, mode='valid')
+        rsi_avg = np.convolve(rsi, np.ones(window) / window, mode='valid')
+        macd_avg = np.convolve(macd, np.ones(window) / window, mode='valid')
         return price_avg, rsi_avg, macd_avg
     except Exception as e:
         logging.error(f"Error calculating moving averages: {str(e)}")
         time.sleep(60)
         return None, None, None
+
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, cash_available):
@@ -133,6 +146,7 @@ def submit_buy_order(symbol, quantity, cash_available):
         time.sleep(60)
         return cash_available
 
+
 # Function to submit sell order
 def submit_sell_order(symbol, quantity, cash_available):
     try:
@@ -152,6 +166,7 @@ def submit_sell_order(symbol, quantity, cash_available):
         time.sleep(60)
         return cash_available
 
+
 # Function to check if current time is within trading hours
 def is_trading_hours():
     eastern = pytz.timezone('US/Eastern')
@@ -160,9 +175,11 @@ def is_trading_hours():
     trading_end = now.replace(hour=16, minute=0, second=0)
     return now.weekday() < 5 and trading_start <= now <= trading_end
 
+
 # Function to check if model files exist
 def does_model_exist(model_name):
     return os.path.isfile(model_name)
+
 
 # Function to load LSTM model
 def load_lstm_model(model_path):
@@ -171,6 +188,7 @@ def load_lstm_model(model_path):
     except Exception as e:
         logging.error(f"Error loading LSTM model: {str(e)}")
         return None
+
 
 # Function to load RandomForest model
 def load_rf_model(model_path):
@@ -181,6 +199,7 @@ def load_rf_model(model_path):
         logging.error(f"Error loading RandomForest model: {str(e)}")
         return None
 
+
 # Function to save model
 def save_model(model, model_path):
     try:
@@ -188,6 +207,7 @@ def save_model(model, model_path):
     except Exception as e:
         logging.error(f"Error saving model: {str(e)}")
         time.sleep(60)
+
 
 # Function to create LSTM model
 def create_lstm_model(input_shape):
@@ -207,6 +227,7 @@ def create_lstm_model(input_shape):
         time.sleep(60)
         return None
 
+
 # Function to get account information
 def get_account_info():
     try:
@@ -220,9 +241,28 @@ def get_account_info():
         time.sleep(60)
         return None, None, None
 
+
 # Main loop
 while True:
     try:
+        years_ago = 1
+
+        # Fetch data
+        data = fetch_data(years_ago)
+        if data is None:
+            continue
+        data = data.values  # Convert to numpy array
+
+        # Get account information
+        cash_available, day_trade_count, positions = get_account_info()
+        if cash_available is None or day_trade_count is None or positions is None:
+            continue
+
+        # Calculate moving averages for stock prices, RSI, and MACD
+        price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
+        if price_avg is None or rsi_avg is None or macd_avg is None:
+            continue
+
         # Print current date and time in Eastern Time Zone
         eastern = pytz.timezone('US/Eastern')
         current_time = datetime.now(eastern).strftime("%Y-%m-%d %H:%M")
@@ -240,11 +280,11 @@ while True:
         # Print current day trade number out of 3 in 5 days
         print(f"Current day trade count: {day_trade_count}/3 in 5 days")
 
-        if 1 == 1:     #debug code to run 24 hours, 7 days
-        #if is_trading_hours():
-            print("Trading hours - executing trades...")
+        if 1 == 1:  # debug code to run 24 hours, 7 days
+            # if is_trading_hours():
+            print("Trading hours. Looking for stocks to trade.....")
             # Fetch data
-            data = fetch_data(symbols_to_buy)
+            data = fetch_data(years_ago)
             if data is None:
                 continue
             data = data.values  # Convert to numpy array
@@ -295,27 +335,28 @@ while True:
                 rsi = data[-1, symbols_to_buy.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
                 macd = data[-1, symbols_to_buy.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
                 if (ensemble_predictions[-1] < current_price * 0.998 and  # Buy if price drops more than 0.2%
-                    cash_available >= current_price and 
-                    rsi < rsi_avg[-1] and 
-                    macd < 0):
+                        cash_available >= current_price and
+                        rsi < rsi_avg[-1] and
+                        macd < 0):
                     quantity = int(cash_available // current_price)  # Buy as many shares as possible
                     cash_available = submit_buy_order(symbol, quantity, cash_available)
 
             # Check day trade count and sell positions if less than 3 and at a higher price
             if day_trade_count < 3:
                 for symbol, quantity in positions.items():
-                    purchase_price = float(position.avg_entry_price)
-                    current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
-                    rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
-                    macd = data[-1, symbols.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
-                    if (symbol in symbols and 
-                        current_price > purchase_price * 1.005 and  # Sell if price is 0.5% or greater than purchase price
-                        rsi > rsi_avg[-1] and 
-                        macd > 0):
+                    purchase_price = float(positions.avg_entry_price)
+                    current_price = data[-1, symbols_to_buy.index(symbol) * 6 + 3]  # Close price is at every 6th index
+                    rsi = data[-1, symbols_to_buy.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
+                    macd = data[-1, symbols_to_buy.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
+                    if (symbol in symbols_to_buy and
+                            current_price > purchase_price * 1.005 and  # Sell if price is 0.5% or greater than purchase price
+                            rsi > rsi_avg[-1] and
+                            macd > 0):
                         cash_available = submit_sell_order(symbol, quantity, cash_available)
-        else:
-            print("Not trading hours - waiting...")
-            print("This program runs Monday - Friday, 9:30am - 4:00pm.")
+
+        print("Not trading hours - waiting...")
+
+        print("This program runs Monday - Friday, 9:30am - 4:00pm.")
 
         # Print a message about sleeping for 60 seconds
         print("Sleeping for 60 seconds...")
