@@ -14,6 +14,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 import pickle
+import logging
+
+# Configure logging to write to a file
+logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
 
 # Load environment variables for Alpaca API
 API_KEY_ID = os.getenv('APCA_API_KEY_ID')
@@ -28,81 +32,119 @@ symbols = ['AGQ', 'UGL']
 
 # Function to fetch historical data
 def fetch_data():
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=365*2)  # Two years of data
-    data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
-    data = add_all_ta_features(data, colprefix='ta_')
-    return data
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365*2)  # Two years of data
+        data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
+        data = add_all_ta_features(data, colprefix='ta_')
+        return data
+    except Exception as e:
+        logging.error(f"Error fetching data: {str(e)}")
+        time.sleep(60)
+        return None
 
 # Function to preprocess data
 def preprocess_data(data):
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(data)
-    return scaled_data
+    try:
+        scaler = MinMaxScaler()
+        scaled_data = scaler.fit_transform(data)
+        return scaled_data
+    except Exception as e:
+        logging.error(f"Error preprocessing data: {str(e)}")
+        time.sleep(60)
+        return None
 
 # Function to create sequences for LSTM
 def create_sequences(data, window_size):
-    X, y = [], []
-    for i in range(len(data) - window_size):
-        X.append(data[i:i+window_size])
-        y.append(data[i+window_size, 0])  # Predict next close price
-    return np.array(X), np.array(y)
+    try:
+        X, y = [], []
+        for i in range(len(data) - window_size):
+            X.append(data[i:i+window_size])
+            y.append(data[i+window_size, 0])  # Predict next close price
+        return np.array(X), np.array(y)
+    except Exception as e:
+        logging.error(f"Error creating sequences: {str(e)}")
+        time.sleep(60)
+        return None, None
 
 # Function to build and train the LSTM model
 def build_and_train_lstm_model(X_train, y_train, window_size):
-    model = Sequential([
-        LSTM(64, activation='relu', return_sequences=True, input_shape=(window_size, X_train.shape[2])),
-        Dropout(0.2),
-        LSTM(64, activation='relu'),
-        Dropout(0.2),
-        Dense(32, activation='relu'),
-        Dense(1)
-    ])
-    model.compile(optimizer='adam', loss='mse')
+    try:
+        model = Sequential([
+            LSTM(64, activation='relu', return_sequences=True, input_shape=(window_size, X_train.shape[2])),
+            Dropout(0.2),
+            LSTM(64, activation='relu'),
+            Dropout(0.2),
+            Dense(32, activation='relu'),
+            Dense(1)
+        ])
+        model.compile(optimizer='adam', loss='mse')
 
-    # Early stopping
-    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+        # Early stopping
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
-    # Train the model
-    model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2, callbacks=[early_stopping], verbose=1)
+        # Train the model
+        model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2, callbacks=[early_stopping], verbose=1)
 
-    return model
+        return model
+    except Exception as e:
+        logging.error(f"Error building and training LSTM model: {str(e)}")
+        time.sleep(60)
+        return None
 
 # Function to build and train the RandomForest model
 def build_and_train_rf_model(X_train, y_train):
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X_train.reshape(X_train.shape[0], -1), y_train)
-    return model
+    try:
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model.fit(X_train.reshape(X_train.shape[0], -1), y_train)
+        return model
+    except Exception as e:
+        logging.error(f"Error building and training RandomForest model: {str(e)}")
+        time.sleep(60)
+        return None
 
 # Function to calculate moving averages for stock prices, RSI, and MACD
 def calculate_moving_averages(data, window):
-    close_prices = data[:, 3]  # Close prices are in the fourth column
-    rsi = data[:, -2]  # RSI is the second last column
-    macd = data[:, -1]  # MACD is the last column
-    price_avg = np.convolve(close_prices, np.ones(window)/window, mode='valid')
-    rsi_avg = np.convolve(rsi, np.ones(window)/window, mode='valid')
-    macd_avg = np.convolve(macd, np.ones(window)/window, mode='valid')
-    return price_avg, rsi_avg, macd_avg
+    try:
+        close_prices = data[:, 3]  # Close prices are in the fourth column
+        rsi = data[:, -2]  # RSI is the second last column
+        macd = data[:, -1]  # MACD is the last column
+        price_avg = np.convolve(close_prices, np.ones(window)/window, mode='valid')
+        rsi_avg = np.convolve(rsi, np.ones(window)/window, mode='valid')
+        macd_avg = np.convolve(macd, np.ones(window)/window, mode='valid')
+        return price_avg, rsi_avg, macd_avg
+    except Exception as e:
+        logging.error(f"Error calculating moving averages: {str(e)}")
+        time.sleep(60)
+        return None, None, None
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity):
-    api.submit_order(
-        symbol=symbol,
-        qty=quantity,
-        side='buy',
-        type='market',
-        time_in_force='gtc'
-    )
+    try:
+        api.submit_order(
+            symbol=symbol,
+            qty=quantity,
+            side='buy',
+            type='market',
+            time_in_force='gtc'
+        )
+    except Exception as e:
+        logging.error(f"Error submitting buy order: {str(e)}")
+        time.sleep(60)
 
 # Function to submit sell order
 def submit_sell_order(symbol, quantity):
-    api.submit_order(
-        symbol=symbol,
-        qty=quantity,
-        side='sell',
-        type='market',
-        time_in_force='gtc'
-    )
+    try:
+        api.submit_order(
+            symbol=symbol,
+            qty=quantity,
+            side='sell',
+            type='market',
+            time_in_force='gtc'
+        )
+    except Exception as e:
+        logging.error(f"Error submitting sell order: {str(e)}")
+        time.sleep(60)
 
 # Function to check if current time is within trading hours
 def is_trading_hours():
@@ -116,87 +158,118 @@ def is_trading_hours():
 def does_model_exist(model_name):
     return os.path.isfile(model_name)
 
+# Function to train the brain models to recognize price patterns
+def train_price_patterns(data):
+    try:
+        # Train models to recognize times of the day when prices are lower for buying
+        # and times of the day when prices are higher for selling
+        pass  # Add your training logic here
+    except Exception as e:
+        logging.error(f"Error training price patterns: {str(e)}")
+        time.sleep(60)
+
 # Main loop
 while True:
-    if does_model_exist('lstm_model.h5') and does_model_exist('rf_model.pkl'):
-        # Load existing LSTM model
-        lstm_model = load_model('lstm_model.h5')
+    try:
+        if does_model_exist('lstm_model.h5') and does_model_exist('rf_model.pkl'):
+            # Load existing LSTM model
+            lstm_model = load_model('lstm_model.h5')
 
-        # Load existing RandomForest model
-        with open('rf_model.pkl', 'rb') as f:
-            rf_model = pickle.load(f)
-    else:
-        # Fetch data
-        data = fetch_data()
-        data = data.values  # Convert to numpy array
+            # Load existing RandomForest model
+            with open('rf_model.pkl', 'rb') as f:
+                rf_model = pickle.load(f)
+        else:
+            # Fetch data
+            data = fetch_data()
+            if data is None:
+                continue
+            data = data.values  # Convert to numpy array
 
-        # Preprocess data
-        scaled_data = preprocess_data(data)
+            # Preprocess data
+            scaled_data = preprocess_data(data)
+            if scaled_data is None:
+                continue
 
-        # Create sequences for LSTM
-        X_lstm, y_lstm = create_sequences(scaled_data, window_size=10)
+            # Create sequences for LSTM
+            X_lstm, y_lstm = create_sequences(scaled_data, window_size=10)
+            if X_lstm is None or y_lstm is None:
+                continue
 
-        # Train LSTM model
-        X_train_lstm, X_test_lstm, y_train_lstm, y_test_lstm = train_test_split(X_lstm, y_lstm, test_size=0.2, random_state=42)
-        lstm_model = build_and_train_lstm_model(X_train_lstm, y_train_lstm, window_size=10)
-        lstm_model.save('lstm_model.h5')
+            # Train LSTM model
+            X_train_lstm, X_test_lstm, y_train_lstm, y_test_lstm = train_test_split(X_lstm, y_lstm, test_size=0.2, random_state=42)
+            lstm_model = build_and_train_lstm_model(X_train_lstm, y_train_lstm, window_size=10)
+            if lstm_model is None:
+                continue
+            lstm_model.save('lstm_model.h5')
 
-        # Train RandomForest model
-        X_rf, y_rf = scaled_data[:, :-1], scaled_data[:, -1]
-        X_train_rf, X_test_rf, y_train_rf, y_test_rf = train_test_split(X_rf, y_rf, test_size=0.2, random_state=42)
-        rf_model = build_and_train_rf_model(X_train_rf, y_train_rf)
-        with open('rf_model.pkl', 'wb') as f:
-            pickle.dump(rf_model, f)
+            # Train RandomForest model
+            X_rf, y_rf = scaled_data[:, :-1], scaled_data[:, -1]
+            X_train_rf, X_test_rf, y_train_rf, y_test_rf = train_test_split(X_rf, y_rf, test_size=0.2, random_state=42)
+            rf_model = build_and_train_rf_model(X_train_rf, y_train_rf)
+            if rf_model is None:
+                continue
+            with open('rf_model.pkl', 'wb') as f:
+                pickle.dump(rf_model, f)
 
-    if is_trading_hours():
-        # Fetch data
-        data = fetch_data()
-        data = data.values  # Convert to numpy array
+        if is_trading_hours():
+            # Fetch data
+            data = fetch_data()
+            if data is None:
+                continue
+            data = data.values  # Convert to numpy array
 
-        # Calculate moving averages for stock prices, RSI, and MACD
-        price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
+            # Calculate moving averages for stock prices, RSI, and MACD
+            price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
+            if price_avg is None or rsi_avg is None or macd_avg is None:
+                continue
 
-        # Predict using LSTM model
-        predictions_lstm = lstm_model.predict(X_test_lstm)
+            # Train models to recognize price patterns
+            train_price_patterns(data)
 
-        # Predict using RandomForest model
-        predictions_rf = rf_model.predict(X_test_rf)
+            # Predict using LSTM model
+            predictions_lstm = lstm_model.predict(X_test_lstm)
 
-        # Ensemble predictions
-        ensemble_predictions = (predictions_lstm + predictions_rf) / 2
+            # Predict using RandomForest model
+            predictions_rf = rf_model.predict(X_test_rf)
 
-        # Execute buy orders based on ensemble predictions and available cash
-        for symbol in symbols:
-            current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
-            rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
-            macd = data[-1, symbols.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
-            if (ensemble_predictions[-1] < current_price and 
-                cash_available >= current_price and 
-                rsi < rsi_avg[-1] and 
-                macd < 0):
-                quantity = int(cash_available // current_price)  # Buy as many shares as possible
-                submit_buy_order(symbol, quantity)
-                cash_available -= quantity * current_price
+            # Ensemble predictions
+            ensemble_predictions = (predictions_lstm + predictions_rf) / 2
 
-        # Check day trade count and sell positions if less than 3 and at a higher price
-        account_info = api.get_account()
-        day_trade_count = account_info.daytrade_count
-        if day_trade_count < 3:
-            positions = api.list_positions()
-            for position in positions:
-                symbol = position.symbol
-                purchase_price = float(position.avg_entry_price)
+            # Execute buy orders based on ensemble predictions and available cash
+            for symbol in symbols:
                 current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
                 rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
                 macd = data[-1, symbols.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
-                if (symbol in symbols and 
-                    current_price > purchase_price and 
-                    rsi > rsi_avg[-1] and 
-                    macd > 0):
-                    quantity = int(position.qty)
-                    # Check if ensemble prediction is higher than purchase price
-                    if ensemble_predictions[-1] > purchase_price:
+                if (ensemble_predictions[-1] < current_price * 0.998 and  # Buy if price drops more than 0.2%
+                    cash_available >= current_price and 
+                    rsi < rsi_avg[-1] and 
+                    macd < 0):
+                    quantity = int(cash_available // current_price)  # Buy as many shares as possible
+                    submit_buy_order(symbol, quantity)
+                    cash_available -= quantity * current_price
+
+            # Check day trade count and sell positions if less than 3 and at a higher price
+            account_info = api.get_account()
+            day_trade_count = account_info.daytrade_count
+            if day_trade_count < 3:
+                positions = api.list_positions()
+                for position in positions:
+                    symbol = position.symbol
+                    purchase_price = float(position.avg_entry_price)
+                    current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
+                    rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
+                    macd = data[-1, symbols.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
+                    if (symbol in symbols and 
+                        current_price > purchase_price * 1.005 and  # Sell if price is 0.5% or greater than purchase price
+                        rsi > rsi_avg[-1] and 
+                        macd > 0):
+                        quantity = int(position.qty)
                         submit_sell_order(symbol, quantity)
 
-    # Sleep for some time before checking again
-    time.sleep(60)  # Sleep for 1 minute before checking again
+        # Sleep for some time before checking again
+        time.sleep(60)  # Sleep for 1 minute before checking again
+
+    except Exception as e:
+        logging.error(f"Error occurred: {str(e)}")
+        logging.info("Restarting in 60 seconds...")
+        time.sleep(60)  # Restart after 60 seconds
