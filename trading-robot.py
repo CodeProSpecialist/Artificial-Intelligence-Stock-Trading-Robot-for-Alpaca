@@ -3,18 +3,16 @@ import os
 import pickle
 import time
 from datetime import datetime, timedelta
-import pandas as pd
-import alpaca_trade_api as tradeapi
 import numpy as np
 import pytz
 import yfinance as yf
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.ensemble import RandomForestRegressor
 from ta import add_all_ta_features
 import torch
 from torch import nn
 from torch.nn import functional as F
+import alpaca_trade_api as tradeapi
 
 # Configure logging to write to a file
 logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
@@ -44,9 +42,6 @@ def read_stock_symbols_list():
     symbols_to_buy = symbols
     return symbols_to_buy
 
-import yfinance as yf
-import time
-from datetime import datetime, timedelta
 
 def fetch_data():
     print("Fetching data...")
@@ -70,7 +65,7 @@ def fetch_data():
             time.sleep(1)  # Sleep for 1 second between fetching data for each symbol
         if data:
             # Concatenate the list of DataFrames into a single DataFrame
-            combined_data = pd.concat(data)
+            combined_data = np.concatenate(data)
             # Add technical analysis features
             combined_data = add_all_ta_features(combined_data, open='Open', high='High', low='Low', close='Close', volume='Volume', colprefix='ta_')
             return combined_data
@@ -229,8 +224,6 @@ while True:
         data = fetch_data()
         if data is None:
             continue
-        data = data.values  # Convert to numpy array
-
         # Get account information
         cash_available, day_trade_count, positions = get_account_info()
         if cash_available is None or day_trade_count is None or positions is None:
