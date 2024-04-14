@@ -27,7 +27,7 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
 # Function to fetch historical data
-def fetch_data(symbols):
+def fetch_data():
     try:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365*2)  # Two years of data
@@ -196,36 +196,51 @@ def create_lstm_model(input_shape):
         time.sleep(60)
         return None
 
-# Function to read list of stocks from file
-def read_stock_list(file_path):
+# Function to get account information
+def get_account_info():
     try:
-        with open(file_path, 'r') as file:
-            return file.read().splitlines()
+        account_info = api.get_account()
+        cash_available = float(account_info.cash)
+        day_trade_count = account_info.daytrade_count
+        positions = {position.symbol: float(position.qty) for position in api.list_positions()}
+        return cash_available, day_trade_count, positions
     except Exception as e:
-        logging.error(f"Error reading stock list from file: {str(e)}")
-        return []
+        logging.error(f"Error getting account information: {str(e)}")
+        time.sleep(60)
+        return None, None, None
 
 # Main loop
-first_run = True
 while True:
     try:
-        # Read list of stocks from file
-        stock_list = read_stock_list('list-of-stocks-to-buy.txt')
-        if not stock_list:
-            logging.error("Empty stock list. Exiting...")
-            break
-        
+        # Print current date
+        current_date = datetime.now().strftime("%A, %B %d, %Y")
+        print("\nCurrent date:", current_date)
+
+        # Get account information
+        cash_available, day_trade_count, positions = get_account_info()
+        if cash_available is None or day_trade_count is None or positions is None:
+            continue
+
+        # Print current account cash balance
+        print("Current cash balance: $%.2f" % cash_available)
+
+        # Print current day trade number out of 3 in 5 days
+        print("Day trades remaining (5 days): %d/3" % day_trade_count)
+
+        # Print out all owned positions with their current prices and % changes in price after purchase
+        print("Owned Positions:")
+        for symbol, quantity in positions.items():
+            current_price = api.get_last_trade(symbol).price
+            purchase_price = float(position.avg_entry_price)
+            price_change_percent = ((current_price - purchase_price) / purchase_price) * 100
+            print(f"{symbol}: Quantity - {quantity}, Current Price - ${current_price:.2f}, Change - {price_change_percent:.2f}%")
+
         if is_trading_hours():
             # Fetch data
-            data = fetch_data(stock_list)
+            data = fetch_data()
             if data is None:
                 continue
             data = data.values  # Convert to numpy array
-
-            # Get account information
-            cash_available, day_trade_count, positions = get_account_info()
-            if cash_available is None or day_trade_count is None or positions is None:
-                continue
 
             # Calculate moving averages for stock prices, RSI, and MACD
             price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
@@ -287,20 +302,8 @@ while True:
                         macd > 0):
                         cash_available = submit_sell_order(symbol, quantity, cash_available)
 
-        # Train brain models on the first run and every day at 8:25 PM Eastern Time
-        eastern = pytz.timezone('US/Eastern')
-        now = datetime.now(eastern)
-        if first_run or (now.hour == 20 and now.minute == 25):
-            if is_trading_hours():  # Ensure training is not done during trading hours
-                continue
-            if first_run:
-                logging.info("Training brain models on first run...")
-            else:
-                logging.info("Training brain models at 8:25 PM Eastern Time...")
-
-            # Code for training brain models goes here
-
-            first_run = False
+        # Print information message
+        print("Activity process completed. Program sleeping...")
 
         # Sleep for some time before checking again
         time.sleep(60)  # Sleep for 1 minute before checking again
