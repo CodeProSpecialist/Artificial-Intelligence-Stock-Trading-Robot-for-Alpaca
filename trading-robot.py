@@ -14,6 +14,25 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+# Define the LSTMModel class outside the function
+class LSTMModel(nn.Module):
+    def __init__(self, input_size):
+        super(LSTMModel, self).__init__()
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=64, num_layers=2, batch_first=True)
+        self.dropout = nn.Dropout(0.2)
+        self.fc1 = nn.Linear(64, 32)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(32, 1)
+
+    def forward(self, x):
+        lstm_output, _ = self.lstm(x)
+        lstm_output_last = lstm_output[:, -1, :]  # Select output of last time step
+        dropout_output = self.dropout(lstm_output_last)
+        fc1_output = self.fc1(dropout_output)
+        relu_output = self.relu(fc1_output)
+        output = self.fc2(relu_output)
+        return output
+
 # Configure logging to write to a file
 logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
 
@@ -66,26 +85,9 @@ def create_sequences(data, window_size):
     return np.array(X), np.array(y)
 
 # Function to build and train the LSTM model
-def build_and_train_lstm_model(X_train, y_train, window_size):
-    class LSTMModel(nn.Module):
-        def __init__(self):
-            super(LSTMModel, self).__init__()
-            self.lstm = nn.LSTM(input_size=X_train.shape[2], hidden_size=64, num_layers=2, batch_first=True)
-            self.dropout = nn.Dropout(0.2)
-            self.fc1 = nn.Linear(64, 32)
-            self.relu = nn.ReLU()
-            self.fc2 = nn.Linear(32, 1)
-
-        def forward(self, x):
-            lstm_output, _ = self.lstm(x)
-            lstm_output_last = lstm_output[:, -1, :]  # Select output of last time step
-            dropout_output = self.dropout(lstm_output_last)
-            fc1_output = self.fc1(dropout_output)
-            relu_output = self.relu(fc1_output)
-            output = self.fc2(relu_output)
-            return output
-
-    model = LSTMModel()
+def build_and_train_lstm_model(X_train, y_train, window_size, model=None):
+    if model is None:
+        model = LSTMModel(input_size=X_train.shape[2])
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     epochs = 50
@@ -105,7 +107,6 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
 
     print("LSTM model training complete.")
     return model
-
 
 # Function to save the model
 def save_model(model, model_type):
@@ -201,9 +202,14 @@ while True:
         # Convert lists to numpy arrays
         X_all, y_all = np.array(X_all), np.array(y_all)
 
-        # Train LSTM model
-        lstm_model = build_and_train_lstm_model(X_all, y_all, window_size)
-        save_model(lstm_model, "lstm")
+        # Load or create LSTM model
+        lstm_model = load_model("lstm")
+        if lstm_model is None:
+            lstm_model = build_and_train_lstm_model(X_all, y_all, window_size)
+            save_model(lstm_model, "lstm")
+        else:
+            lstm_model = build_and_train_lstm_model(X_all, y_all, window_size, lstm_model)
+            save_model(lstm_model, "lstm")
 
         # Make predictions and execute orders
         for symbol in symbols_to_buy:
