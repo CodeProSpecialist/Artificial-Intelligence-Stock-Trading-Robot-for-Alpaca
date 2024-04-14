@@ -48,21 +48,20 @@ def calculate_technical_indicators(symbol, lookback_days=90):
 
     # Volume is already present in historical_data
 
-    return historical_data
-
+    return historical_data.values  # Return numpy array
 
 # Function to preprocess data
 def preprocess_data(data):
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(data)
-    return scaled_data
+    return scaled_data, scaler
 
 # Function to create sequences for LSTM
 def create_sequences(data, window_size):
     X, y = [], []
     for i in range(len(data) - window_size):
-        X.append(data[i:i + window_size])
-        y.append(data[i + window_size, 0])  # Predict next close price
+        X.append(data[i:i + window_size, :-1])  # Exclude the last column (Close price)
+        y.append(data[i + window_size, -1])      # Predict next close price
     return np.array(X), np.array(y)
 
 # Function to build and train the LSTM model
@@ -102,7 +101,6 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
             optimizer.step()
 
     return model
-
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, cash_available):
@@ -150,34 +148,34 @@ while True:
         data = []
         for symbol in symbols_to_buy:
             technical_data = calculate_technical_indicators(symbol)
-            data.append(technical_data.values)
+            data.append(technical_data)
             time.sleep(1)
         if data:
-            combined_data = np.concatenate(data)
-            scaled_data = preprocess_data(combined_data)
+            combined_data = np.concatenate(data, axis=0)
+            scaled_data, scaler = preprocess_data(combined_data)
             X, y = create_sequences(scaled_data, window_size)
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
             lstm_model = build_and_train_lstm_model(X_train, y_train, window_size)
 
             # Make predictions
-            lstm_predictions = lstm_model(torch.tensor(X_test, dtype=torch.float32))
+            lstm_predictions = lstm_model(torch.tensor(X_test, dtype=torch.float32).unsqueeze(0))  # Add batch dimension
 
             # Execute buy/sell orders based on predictions and account information
             cash_available, day_trade_count, positions = get_account_info()
             for symbol in symbols_to_buy:
-                index = -1, symbols_to_buy.index(symbol) * 5 + 3
-                current_price = data[index[0]][index[1]]
+                index = symbols_to_buy.index(symbol)
+                current_prices = scaled_data[-window_size:, -1]  # Last column contains close prices
+                current_price = current_prices[index]
 
                 # Convert current_price * 0.998 to a PyTorch tensor
                 current_price_tensor = torch.tensor(current_price * 0.998)
 
                 # Assuming lstm_predictions[-1] is a tensor representing predictions for multiple data points
                 # Select a specific prediction to compare with the current price
-                selected_prediction = lstm_predictions[-1][0]
+                selected_prediction = lstm_predictions[0, -1]  # Select prediction for the last sequence
 
                 # Compare the selected prediction with the current price
                 if selected_prediction < current_price_tensor and cash_available >= current_price:
-
                     quantity = int(cash_available // current_price)  # Buy as many shares as possible
                     cash_available = submit_buy_order(symbol, quantity, cash_available)
                 if day_trade_count < 3:
