@@ -5,6 +5,9 @@
 # Update package list
 sudo apt update
 
+wget -O /tmp/7fa2af80.pub https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/7fa2af80.pub
+sudo apt-key add /tmp/7fa2af80.pub
+
 # Add NVIDIA CUDA repository key
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/Release.gpg
 sudo apt-key add Release.gpg
