@@ -3,7 +3,18 @@
 # Update package list
 sudo apt update
 
-sudo add-apt-repository "deb http://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu$(lsb_release -cs) main"
+# Add NVIDIA CUDA repository key
+wget https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch/cuda-keyring_1.0-1_all.deb
+sudo dpkg -i cuda-keyring_1.0-1_all.deb
+
+# Add NVIDIA CUDA repository
+sudo sh -c 'echo "deb https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch /" > /etc/apt/sources.list.d/cuda.list'
+
+# Update package lists
+sudo apt-get update
+
+# Clean up
+rm cuda-keyring_1.0-1_all.deb
 
 sudo apt update
 
