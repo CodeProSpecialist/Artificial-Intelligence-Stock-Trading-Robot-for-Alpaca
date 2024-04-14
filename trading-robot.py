@@ -11,7 +11,7 @@ from datetime import datetime, time as dt_time, timedelta
 import pytz
 from ta import add_all_ta_features
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import mean_squared_error
 import pickle
 import logging
@@ -196,7 +196,6 @@ def train_price_patterns(data):
         logging.error(f"Error training price patterns: {str(e)}")
         time.sleep(60)
 
-    
 # Main loop
 while True:
     try:
@@ -240,6 +239,9 @@ while True:
             with open('rf_model.pkl', 'wb') as f:
                 pickle.dump(rf_model, f)
 
+            # Train buying and selling models
+            train_price_patterns(data)
+
         if is_trading_hours():
             # Fetch data
             data = fetch_data()
@@ -251,9 +253,6 @@ while True:
             price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
             if price_avg is None or rsi_avg is None or macd_avg is None:
                 continue
-
-            # Train models to recognize price patterns
-            train_price_patterns(data)
 
             # Predict using LSTM model
             predictions_lstm = lstm_model.predict(X_test_lstm)
