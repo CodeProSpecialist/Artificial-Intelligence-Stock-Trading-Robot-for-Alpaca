@@ -81,12 +81,15 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
             batch_X = torch.tensor(X_train[i:i + batch_size], dtype=torch.float32)
             batch_y = torch.tensor(y_train[i:i + batch_size], dtype=torch.float32).unsqueeze(-1)
             optimizer.zero_grad()
-            output, _ = model(batch_X)
-            loss = criterion(output.squeeze(-1), batch_y)
+            output, _ = model(batch_X)  # Ignore the hidden state
+            output = output.squeeze(-1)  # Remove the last dimension (1)
+            loss = criterion(output, batch_y)
             loss.backward()
             optimizer.step()
 
     return model
+
+
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, cash_available):
@@ -127,7 +130,7 @@ def get_account_info():
 # Main loop
 while True:
     try:
-        symbols_to_buy = ['AAPL', 'GOOG']  # Example symbols to buy
+        symbols_to_buy = ['AGQ', 'UGL']  # Example symbols to buy
         window_size = 10  # Example window size for LSTM
 
         # Fetch and calculate technical indicators
