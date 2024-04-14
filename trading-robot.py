@@ -248,7 +248,7 @@ while True:
         years_ago = 1
 
         # Fetch data
-        data = fetch_data(years_ago)
+        data = fetch_data()
         if data is None:
             continue
         data = data.values  # Convert to numpy array
@@ -284,7 +284,7 @@ while True:
             # if is_trading_hours():
             print("Trading hours. Looking for stocks to trade.....")
             # Fetch data
-            data = fetch_data(years_ago)
+            data = fetch_data()
             if data is None:
                 continue
             data = data.values  # Convert to numpy array
