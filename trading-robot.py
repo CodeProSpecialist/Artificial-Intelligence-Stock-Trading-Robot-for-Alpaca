@@ -243,7 +243,7 @@ while True:
         if is_trading_hours():
             print("Trading hours - executing trades...")
             # Fetch data
-            data = fetch_data()
+            data = fetch_data(symbols_to_buy)
             if data is None:
                 continue
             data = data.values  # Convert to numpy array
