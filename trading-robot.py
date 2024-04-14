@@ -65,7 +65,7 @@ def create_sequences(data, window_size):
 # Function to build and train the LSTM model
 def build_and_train_lstm_model(X_train, y_train, window_size):
     model = nn.Sequential(
-        nn.LSTM(input_size=X_train.shape[2], hidden_size=64, num_layers=2, batch_first=True),
+        nn.LSTM(input_size=X_train.shape[2], hidden_size=64, num_layers=2, batch_first=True, return_sequences=False),
         nn.Dropout(0.2),
         nn.Linear(64, 32),
         nn.ReLU(),
@@ -81,15 +81,12 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
             batch_X = torch.tensor(X_train[i:i + batch_size], dtype=torch.float32)
             batch_y = torch.tensor(y_train[i:i + batch_size], dtype=torch.float32).unsqueeze(-1)
             optimizer.zero_grad()
-            output, _ = model(batch_X)  # Ignore the hidden state
-            output = output.squeeze(-1)  # Remove the last dimension (1)
+            output = model(batch_X)
             loss = criterion(output, batch_y)
             loss.backward()
             optimizer.step()
 
     return model
-
-
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, cash_available):
