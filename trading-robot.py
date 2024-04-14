@@ -215,35 +215,35 @@ def get_account_info():
 # Main loop
 while True:
     try:
-        # Print current date
-        current_date = datetime.now().strftime("%A, %B %d, %Y")
-        print("\nCurrent date:", current_date)
+        # Print current date and time in Eastern Time Zone
+        eastern = pytz.timezone('US/Eastern')
+        current_time = datetime.now(eastern).strftime("%Y-%m-%d %H:%M")
+        print(f"Current Eastern Time: {current_time}")
 
-        # Get account information
-        cash_available, day_trade_count, positions = get_account_info()
-        if cash_available is None or day_trade_count is None or positions is None:
-            continue
+        # Print list of stocks being monitored to buy along with their current price
+        print("List of stocks being monitored to buy:")
+        for symbol in symbols_to_buy:
+            current_price = data[-1, symbols_to_buy.index(symbol) * 6 + 3]  # Close price is at every 6th index
+            print(f"{symbol}: ${current_price:.2f}")
 
         # Print current account cash balance
-        print("Current cash balance: $%.2f" % cash_available)
+        print(f"Current account cash balance: ${cash_available:.2f}")
 
         # Print current day trade number out of 3 in 5 days
-        print("Day trades remaining (5 days): %d/3" % day_trade_count)
-
-        # Print out all owned positions with their current prices and % changes in price after purchase
-        print("Owned Positions:")
-        for symbol, quantity in positions.items():
-            current_price = api.get_last_trade(symbol).price
-            purchase_price = float(position.avg_entry_price)
-            price_change_percent = ((current_price - purchase_price) / purchase_price) * 100
-            print(f"{symbol}: Quantity - {quantity}, Current Price - ${current_price:.2f}, Change - {price_change_percent:.2f}%")
+        print(f"Current day trade count: {day_trade_count}/3 in 5 days")
 
         if is_trading_hours():
+            print("Trading hours - executing trades...")
             # Fetch data
             data = fetch_data()
             if data is None:
                 continue
             data = data.values  # Convert to numpy array
+
+            # Get account information
+            cash_available, day_trade_count, positions = get_account_info()
+            if cash_available is None or day_trade_count is None or positions is None:
+                continue
 
             # Calculate moving averages for stock prices, RSI, and MACD
             price_avg, rsi_avg, macd_avg = calculate_moving_averages(data, window=50)
@@ -281,10 +281,10 @@ while True:
             ensemble_predictions = (predictions_lstm + predictions_rf) / 2
 
             # Execute buy orders based on ensemble predictions and available cash
-            for symbol in symbols:
-                current_price = data[-1, symbols.index(symbol) * 6 + 3]  # Close price is at every 6th index
-                rsi = data[-1, symbols.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
-                macd = data[-1, symbols.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
+            for symbol in symbols_to_buy:
+                current_price = data[-1, symbols_to_buy.index(symbol) * 6 + 3]  # Close price is at every 6th index
+                rsi = data[-1, symbols_to_buy.index(symbol) * 6 + 10]  # RSI is at every 6th index + 7
+                macd = data[-1, symbols_to_buy.index(symbol) * 6 + 11]  # MACD is at every 6th index + 8
                 if (ensemble_predictions[-1] < current_price * 0.998 and  # Buy if price drops more than 0.2%
                     cash_available >= current_price and 
                     rsi < rsi_avg[-1] and 
@@ -304,11 +304,12 @@ while True:
                         rsi > rsi_avg[-1] and 
                         macd > 0):
                         cash_available = submit_sell_order(symbol, quantity, cash_available)
+        else:
+            print("Not trading hours - waiting...")
+            print("This program runs Monday - Friday, 9:30am - 4:00pm.")
 
-        # Print information message
-        print("Activity process completed. Program sleeping...")
-
-        # Sleep for some time before checking again
+        # Print a message about sleeping for 60 seconds
+        print("Sleeping for 60 seconds...")
         time.sleep(60)  # Sleep for 1 minute before checking again
 
     except Exception as e:
