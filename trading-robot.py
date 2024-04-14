@@ -73,6 +73,8 @@ def fetch_data():
         # Calculate technical analysis features
         data = add_all_ta_features(data, open='Open', high='High', low='Low', close='Close', volume='Volume',
                                    colprefix='ta_')
+        # Flatten the data array
+        data = data.values.flatten()
         return data
     except KeyboardInterrupt:
         print("KeyboardInterrupt detected. Exiting...")
@@ -82,6 +84,7 @@ def fetch_data():
         print(f"Error getting data for {str(e)}")
         time.sleep(60)
         return None
+
 
 
 # Function to preprocess data
