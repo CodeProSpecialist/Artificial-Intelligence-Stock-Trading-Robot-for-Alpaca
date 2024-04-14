@@ -3,13 +3,17 @@ import yfinance as yf
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
 from tensorflow.keras.callbacks import EarlyStopping
 import alpaca_trade_api as tradeapi
 import time
 from datetime import datetime, time as dt_time, timedelta
 import pytz
 from ta import add_all_ta_features
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error
+import pickle
 
 # Load environment variables for Alpaca API
 API_KEY_ID = os.getenv('APCA_API_KEY_ID')
@@ -44,8 +48,8 @@ def create_sequences(data, window_size):
         y.append(data[i+window_size, 0])  # Predict next close price
     return np.array(X), np.array(y)
 
-# Function to build and train the model
-def build_and_train_model(X_train, y_train, window_size):
+# Function to build and train the LSTM model
+def build_and_train_lstm_model(X_train, y_train, window_size):
     model = Sequential([
         LSTM(64, activation='relu', return_sequences=True, input_shape=(window_size, X_train.shape[2])),
         Dropout(0.2),
@@ -63,6 +67,18 @@ def build_and_train_model(X_train, y_train, window_size):
     model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2, callbacks=[early_stopping], verbose=1)
 
     return model
+
+# Function to build and train the RandomForest model
+def build_and_train_rf_model(X_train, y_train):
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train.reshape(X_train.shape[0], -1), y_train)
+    return model
+
+# Function to add noise to data
+def add_noise(data):
+    noise = np.random.normal(0, 0.01, data.shape)
+    noisy_data = data + noise
+    return noisy_data
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity):
@@ -93,14 +109,18 @@ def is_trading_hours():
     return now.weekday() < 5 and trading_start <= now <= trading_end
 
 # Function to check if brain model file exists
-def does_model_exist():
-    return os.path.isfile('brain_model.h5')
+def does_model_exist(model_name):
+    return os.path.isfile(model_name)
 
 # Main loop
 while True:
-    if does_model_exist():
-        # Load existing brain model
-        model = load_model('brain_model.h5')
+    if does_model_exist('lstm_model.h5') and does_model_exist('rf_model.pkl'):
+        # Load existing LSTM model
+        lstm_model = load_model('lstm_model.h5')
+
+        # Load existing RandomForest model
+        with open('rf_model.pkl', 'rb') as f:
+            rf_model = pickle.load(f)
     else:
         # Fetch data
         data = fetch_data()
@@ -109,28 +129,37 @@ while True:
         scaled_data = preprocess_data(data)
 
         # Create sequences for LSTM
-        X, y = create_sequences(scaled_data, window_size=10)
+        X_lstm, y_lstm = create_sequences(scaled_data, window_size=10)
 
-        # Split data into train and test sets
-        split = int(0.8 * len(X))
-        X_train, X_test = X[:split], X[split:]
-        y_train, y_test = y[:split], y[split:]
+        # Train LSTM model
+        X_train_lstm, X_test_lstm, y_train_lstm, y_test_lstm = train_test_split(X_lstm, y_lstm, test_size=0.2, random_state=42)
+        lstm_model = build_and_train_lstm_model(X_train_lstm, y_train_lstm, window_size=10)
+        lstm_model.save('lstm_model.h5')
 
-        # Build and train the model
-        model = build_and_train_model(X_train, y_train, window_size=10)
-        model.save('brain_model.h5')
+        # Train RandomForest model
+        X_rf, y_rf = scaled_data[:, :-1], scaled_data[:, -1]
+        X_train_rf, X_test_rf, y_train_rf, y_test_rf = train_test_split(X_rf, y_rf, test_size=0.2, random_state=42)
+        rf_model = build_and_train_rf_model(X_train_rf, y_train_rf)
+        with open('rf_model.pkl', 'wb') as f:
+            pickle.dump(rf_model, f)
 
     if is_trading_hours():
-        # Predict using the trained model
-        predictions = model.predict(X_test)
+        # Predict using LSTM model
+        predictions_lstm = lstm_model.predict(X_test_lstm)
 
-        # Execute buy orders based on predictions and available cash
+        # Predict using RandomForest model
+        predictions_rf = rf_model.predict(X_test_rf)
+
+        # Ensemble predictions
+        ensemble_predictions = (predictions_lstm + predictions_rf) / 2
+
+        # Execute buy orders based on ensemble predictions and available cash
         for symbol in symbols:
             current_price = data[symbol].iloc[-1]['Close']
             rsi = data[symbol].iloc[-1]['ta_rsi']
             macd = data[symbol].iloc[-1]['ta_macd']
             volume = data[symbol].iloc[-1]['Volume']
-            if predictions[-1] < current_price and cash_available >= current_price and rsi < 30 and macd < 0 and volume < 1000000:
+            if ensemble_predictions[-1] < current_price and cash_available >= current_price and rsi < 30 and macd < 0 and volume < 1000000:
                 quantity = int(cash_available // current_price)  # Buy as many shares as possible
                 submit_buy_order(symbol, quantity)
                 cash_available -= quantity * current_price
@@ -149,24 +178,9 @@ while True:
                 volume = data[symbol].iloc[-1]['Volume']
                 if symbol in symbols and current_price > purchase_price and rsi > 70 and macd > 0 and volume > 1000000:
                     quantity = int(position.qty)
-                    # Check if prediction is higher than purchase price
-                    if predictions[-1] > purchase_price:
+                    # Check if ensemble prediction is higher than purchase price
+                    if ensemble_predictions[-1] > purchase_price:
                         submit_sell_order(symbol, quantity)
-
-    # Retrain the model every 24 hours
-    if datetime.now().hour == 0 and datetime.now().minute == 0:
-        # Fetch new data
-        new_data = fetch_data()
-
-        # Preprocess new data
-        new_scaled_data = preprocess_data(new_data)
-
-        # Create new sequences for LSTM
-        new_X, new_y = create_sequences(new_scaled_data, window_size=10)
-
-        # Update the existing model with new data
-        model.fit(new_X, new_y, epochs=50, batch_size=32, validation_split=0.2, callbacks=[early_stopping], verbose=1)
-        model.save('brain_model.h5')
 
     # Sleep for some time before checking again
     time.sleep(60)  # Sleep for 1 minute before checking again
