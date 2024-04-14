@@ -49,6 +49,10 @@ def calculate_technical_indicators(symbol, lookback_days=90):
     stock_data = yf.Ticker(symbol)
     historical_data = stock_data.history(period=f'{lookback_days}d')
 
+    # Print fetched historical data
+    print("Fetched historical data:")
+    print(historical_data)
+
     # Calculate MACD
     short_window = 12
     long_window = 26
@@ -69,7 +73,6 @@ def calculate_technical_indicators(symbol, lookback_days=90):
 
     return historical_data
 
-
 # Function to preprocess data
 def preprocess_data(data):
     scaler = MinMaxScaler()
@@ -89,8 +92,8 @@ def build_and_train_lstm_model(X_train, y_train, window_size, model=None):
     if model is None:
         model = LSTMModel(input_size=X_train.shape[2])
 
-    print("First stock price before training:", X_train[0, 0, -1])
-    print("Last stock price before training:", X_train[-1, -1, -1])
+    print("First stock price before training:", round(X_train[0, 0, -1], 2))
+    print("Last stock price before training:", round(X_train[-1, -1, -1], 2))
 
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -109,8 +112,8 @@ def build_and_train_lstm_model(X_train, y_train, window_size, model=None):
             loss.backward()
             optimizer.step()
 
-    print("First stock price after training:", X_train[0, 0, -1])
-    print("Last stock price after training:", X_train[-1, -1, -1])
+    print("First stock price after training:", round(X_train[0, 0, -1], 2))
+    print("Last stock price after training:", round(X_train[-1, -1, -1], 2))
     print("LSTM model training complete.")
     return model
 
