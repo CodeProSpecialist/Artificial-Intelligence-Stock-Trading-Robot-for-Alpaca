@@ -48,7 +48,8 @@ def calculate_technical_indicators(symbol, lookback_days=90):
 
     # Volume is already present in historical_data
 
-    return historical_data.values  # Return numpy array
+    return historical_data
+
 
 # Function to preprocess data
 def preprocess_data(data):
@@ -60,8 +61,8 @@ def preprocess_data(data):
 def create_sequences(data, window_size):
     X, y = [], []
     for i in range(len(data) - window_size):
-        X.append(data[i:i + window_size, :-1])  # Exclude the last column (Close price)
-        y.append(data[i + window_size, -1])      # Predict next close price
+        X.append(data[i:i + window_size])
+        y.append(data[i + window_size, 0])  # Predict next close price
     return np.array(X), np.array(y)
 
 # Function to build and train the LSTM model
@@ -90,6 +91,8 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
     epochs = 50
     batch_size = 32
 
+    # Start training
+    print("Training LSTM model...")
     for epoch in range(epochs):
         for i in range(0, len(X_train), batch_size):
             batch_X = torch.tensor(X_train[i:i + batch_size], dtype=torch.float32)
@@ -100,7 +103,31 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
             loss.backward()
             optimizer.step()
 
+    print("LSTM model training complete.")
     return model
+
+
+# Function to save the LSTM model
+def save_lstm_model(model, symbol):
+    model_dir = "models"
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+    model_path = f"{model_dir}/{symbol}_lstm_model.pt"
+    torch.save(model.state_dict(), model_path)
+    print(f"LSTM model for {symbol} saved successfully.")
+
+# Function to load the LSTM model
+def load_lstm_model(symbol, window_size):
+    model_dir = "models"
+    model_path = f"{model_dir}/{symbol}_lstm_model.pt"
+    if os.path.exists(model_path):
+        model = LSTMModel()
+        model.load_state_dict(torch.load(model_path))
+        print(f"LSTM model for {symbol} loaded successfully.")
+        return model
+    else:
+        print(f"No saved LSTM model found for {symbol}. Creating new model...")
+        return build_and_train_lstm_model(X_model, y_model, window_size)
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, cash_available):
@@ -141,64 +168,73 @@ def get_account_info():
 # Main loop
 while True:
     try:
-        print("Fetching and calculating technical indicators...")
         symbols_to_buy = ['AGQ', 'UGL']  # Example symbols to buy
         window_size = 10  # Example window size for LSTM
+        model_1_data_percentage = 0.7  # Percentage of data to use for training model 1
 
-        # Fetch and calculate technical indicators
-        data = []
+        # Print current date and time in Eastern Time
+        eastern = pytz.timezone('US/Eastern')
+        current_time = datetime.now(eastern)
+        print(f"Starting main loop at {current_time.strftime('%Y-%m-%d %H:%M:%S')} (Eastern Time)")
+
         for symbol in symbols_to_buy:
-            print(f"Fetching data for symbol: {symbol}")
+            print(f"Processing {symbol}...")
+
+            # Fetch and calculate technical indicators
             technical_data = calculate_technical_indicators(symbol)
-            data.append(technical_data)
-            time.sleep(1)
-        if data:
-            print("Technical indicators fetched successfully.")
-            combined_data = np.concatenate(data, axis=0)
-            scaled_data, scaler = preprocess_data(combined_data)
+            if technical_data is None:
+                print(f"No data fetched for {symbol}.")
+                continue
+
+            # Preprocess data and create sequences
+            scaled_data, _ = preprocess_data(technical_data.values)
             X, y = create_sequences(scaled_data, window_size)
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-            lstm_model = build_and_train_lstm_model(X_train, y_train, window_size)
 
-            # Make predictions
-            print("Making predictions...")
-            lstm_predictions = lstm_model(torch.tensor(X_test, dtype=torch.float32))  # Remove .unsqueeze(0)
-            print("Predictions made successfully.")
+            # Split data into two subsets for training two models
+            split_index = int(len(X) * model_1_data_percentage)
+            X_model, y_model = X[:split_index], y[:split_index]
 
-            # Execute buy/sell orders based on predictions and account information
-            print("Executing buy/sell orders...")
+            # Load or create the first LSTM model
+            lstm_model_1 = load_lstm_model(symbol, window_size)
+
+            # Train the first LSTM model if it's newly created
+            if not os.path.exists(f"models/{symbol}_lstm_model.pt"):
+                lstm_model_1 = build_and_train_lstm_model(X_model, y_model, window_size)
+                save_lstm_model(lstm_model_1, symbol)
+
+            # Load or create the second LSTM model
+            lstm_model_2 = load_lstm_model(symbol, window_size)
+
+            # Train the second LSTM model if it's newly created
+            if not os.path.exists(f"models/{symbol}_lstm_model.pt"):
+                lstm_model_2 = build_and_train_lstm_model(X[split_index:], y[split_index:], window_size)
+                save_lstm_model(lstm_model_2, symbol)
+
+            # Make predictions using both models
+            lstm_predictions_1 = lstm_model_1(torch.tensor(X[-1:], dtype=torch.float32))
+            lstm_predictions_2 = lstm_model_2(torch.tensor(X[-1:], dtype=torch.float32))
+
+            # Combine predictions from both models
+            combined_predictions = (lstm_predictions_1 + lstm_predictions_2) / 2
+
+            # Execute buy/sell orders based on combined predictions and account information
             cash_available, day_trade_count, positions = get_account_info()
-            for symbol in symbols_to_buy:
-                index = symbols_to_buy.index(symbol)
-                current_prices = scaled_data[-window_size:, -1]  # Last column contains close prices
-                current_price = current_prices[index]
+            current_price = scaled_data[-1, -1]  # Last close price
+            purchase_price = positions.get(symbol, 0)
 
-                # Convert current_price * 0.998 to a PyTorch tensor
-                current_price_tensor = torch.tensor(current_price * 0.998)
+            if combined_predictions.item() < current_price * 0.998 and cash_available >= current_price:
+                quantity = int(cash_available // current_price)
+                cash_available = submit_buy_order(symbol, quantity, cash_available)
+                print(f"Bought {quantity} shares of {symbol}.")
 
-                # Assuming lstm_predictions is a tensor representing predictions for multiple data points
-                # Select a specific prediction to compare with the current price
-                selected_prediction = lstm_predictions[-1]  # Select prediction for the last sequence
-
-                # Compare the selected prediction with the current price
-                if selected_prediction < current_price_tensor and cash_available >= current_price:
-                    print(f"Buying {symbol}...")
-                    quantity = int(cash_available // current_price)  # Buy as many shares as possible
-                    cash_available = submit_buy_order(symbol, quantity, cash_available)
-                    print(f"Buy order for {symbol} executed successfully.")
-                if day_trade_count < 3:
-                    purchase_price = positions[symbol]
-                    if current_price > purchase_price * 1.005:  # Sell if price is 0.5% or greater than purchase price
-                        print(f"Selling {symbol}...")
-                        quantity = int(positions[symbol])  # Sell all shares
-                        cash_available = submit_sell_order(symbol, quantity, cash_available)
-                        print(f"Sell order for {symbol} executed successfully.")
-        else:
-            print("No data fetched. Retrying in 60 seconds...")
-            time.sleep(60)
+            if day_trade_count < 3 and current_price > purchase_price * 1.005:
+                quantity = int(positions[symbol])
+                cash_available = submit_sell_order(symbol, quantity, cash_available)
+                print(f"Sold {quantity} shares of {symbol}.")
 
     except Exception as e:
         logging.error(f"Error occurred: {str(e)}")
-        logging.info("Restarting in 60 seconds...")
-        print("Error occurred. Restarting in 60 seconds...")
-        time.sleep(60)
+        print(f"Error occurred: {str(e)}")
+
+    print("Waiting for next iteration...")
+    time.sleep(60)
