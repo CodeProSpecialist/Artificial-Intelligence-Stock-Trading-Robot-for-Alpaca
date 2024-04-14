@@ -64,13 +64,25 @@ def create_sequences(data, window_size):
 
 # Function to build and train the LSTM model
 def build_and_train_lstm_model(X_train, y_train, window_size):
-    model = nn.Sequential(
-        nn.LSTM(input_size=X_train.shape[2], hidden_size=64, num_layers=2, batch_first=True, return_sequences=False),
-        nn.Dropout(0.2),
-        nn.Linear(64, 32),
-        nn.ReLU(),
-        nn.Linear(32, 1)
-    )
+    class LSTMModel(nn.Module):
+        def __init__(self):
+            super(LSTMModel, self).__init__()
+            self.lstm = nn.LSTM(input_size=X_train.shape[2], hidden_size=64, num_layers=2, batch_first=True)
+            self.dropout = nn.Dropout(0.2)
+            self.fc1 = nn.Linear(64, 32)
+            self.relu = nn.ReLU()
+            self.fc2 = nn.Linear(32, 1)
+
+        def forward(self, x):
+            lstm_output, _ = self.lstm(x)
+            lstm_output_last = lstm_output[:, -1, :]  # Select output of last time step
+            dropout_output = self.dropout(lstm_output_last)
+            fc1_output = self.fc1(dropout_output)
+            relu_output = self.relu(fc1_output)
+            output = self.fc2(relu_output)
+            return output
+
+    model = LSTMModel()
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     epochs = 50
@@ -87,6 +99,7 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
             optimizer.step()
 
     return model
+
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, cash_available):
