@@ -44,7 +44,6 @@ def read_stock_symbols_list():
     symbols_to_buy = symbols
     return symbols_to_buy
 
-
 # Function to fetch historical data
 def fetch_data():
     try:
@@ -52,17 +51,40 @@ def fetch_data():
         print("Currently downloading stock price data.....")
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365 * 1)  # One year of data
-        data = yf.download(symbols_to_buy, start=start_date, end=end_date.strftime('%Y-%m-%d'))
-        for symbol in symbols_to_buy:
-            time.sleep(1)  # Sleep for 1 second between fetching data for each symbol
+        symbols = read_stock_symbols_list()  # Fetch stock symbols
+        if not symbols:
+            print("No stock symbols found.")
+            return None
+        data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
+        if data.empty:
+            print("No data available for the specified symbols.")
+            return None
+        # Ensure data is not empty
+        if len(data) < 1:
+            print("Insufficient data for technical analysis features.")
+            return None
+        # Drop any NaN values
+        data = data.dropna()
+        data.reset_index(inplace=True)
+        # Check if data has enough rows for technical analysis features
+        if len(data) < 200:
+            print("Insufficient data for technical analysis features.")
+            return None
+        # Convert Date column to datetime
+        data['Date'] = pd.to_datetime(data['Date'])
+        # Calculate technical analysis features
         data = add_all_ta_features(data, open='Open', high='High', low='Low', close='Close', volume='Volume',
                                    colprefix='ta_')
         return data
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt detected. Exiting...")
+        sys.exit(0)
     except Exception as e:
         logging.error(f"Error fetching data: {str(e)}")
         print(f"Error getting data for {str(e)}")
         time.sleep(60)
         return None
+
 
 
 # Function to preprocess data
