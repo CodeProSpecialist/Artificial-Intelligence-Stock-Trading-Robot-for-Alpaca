@@ -158,7 +158,7 @@ while True:
             lstm_model = build_and_train_lstm_model(X_train, y_train, window_size)
 
             # Make predictions
-            lstm_predictions = lstm_model(torch.tensor(X_test, dtype=torch.float32).unsqueeze(0))  # Add batch dimension
+            lstm_predictions = lstm_model(torch.tensor(X_test, dtype=torch.float32))  # Remove .unsqueeze(0)
 
             # Execute buy/sell orders based on predictions and account information
             cash_available, day_trade_count, positions = get_account_info()
@@ -170,9 +170,9 @@ while True:
                 # Convert current_price * 0.998 to a PyTorch tensor
                 current_price_tensor = torch.tensor(current_price * 0.998)
 
-                # Assuming lstm_predictions[-1] is a tensor representing predictions for multiple data points
+                # Assuming lstm_predictions is a tensor representing predictions for multiple data points
                 # Select a specific prediction to compare with the current price
-                selected_prediction = lstm_predictions[0, -1]  # Select prediction for the last sequence
+                selected_prediction = lstm_predictions[-1]  # Select prediction for the last sequence
 
                 # Compare the selected prediction with the current price
                 if selected_prediction < current_price_tensor and cash_available >= current_price:
