@@ -29,6 +29,11 @@ api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 # Define ETF symbols
 symbols_to_buy = []
 
+# Read list of stocks to buy from text file
+with open("list-of-stocks-to-buy.txt", "r") as file:
+    for line in file:
+        symbols_to_buy.append(line.strip())
+
 # Function to fetch historical data
 def fetch_data():
     try:
