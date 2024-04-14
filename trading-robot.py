@@ -161,13 +161,42 @@ def does_model_exist(model_name):
 # Function to train the brain models to recognize price patterns
 def train_price_patterns(data):
     try:
-        # Train models to recognize times of the day when prices are lower for buying
-        # and times of the day when prices are higher for selling
-        pass  # Add your training logic here
+        for symbol in symbols:
+            symbol_data = data[data['Symbol'] == symbol]
+            # Extract relevant features
+            prices = symbol_data['Close'].values
+            dates = symbol_data.index.date
+            times = symbol_data.index.time
+            rsi = symbol_data['ta_RSI']
+            macd = symbol_data['ta_MACD']
+            volume = symbol_data['Volume']
+
+            # Train models to recognize times of the day when prices are lower for buying
+            # and times of the day when prices are higher for selling
+            X = np.column_stack((prices, rsi, macd, volume))
+            y_buy = np.where(prices[:-1] < prices[1:], 1, 0)  # 1 if price is increasing, else 0
+            y_sell = np.where(prices[:-1] > prices[1:], 1, 0)  # 1 if price is decreasing, else 0
+
+            # Train model for buying
+            buying_model = RandomForestClassifier()
+            buying_model.fit(X[:-1], y_buy)
+
+            # Train model for selling
+            selling_model = RandomForestClassifier()
+            selling_model.fit(X[:-1], y_sell)
+
+            # Save models for future use
+            with open(f'{symbol}_buying_model.pkl', 'wb') as f_buy:
+                pickle.dump(buying_model, f_buy)
+            with open(f'{symbol}_selling_model.pkl', 'wb') as f_sell:
+                pickle.dump(selling_model, f_sell)
+
+            print(f"Trained models for {symbol} successfully.")
     except Exception as e:
         logging.error(f"Error training price patterns: {str(e)}")
         time.sleep(60)
 
+    
 # Main loop
 while True:
     try:
