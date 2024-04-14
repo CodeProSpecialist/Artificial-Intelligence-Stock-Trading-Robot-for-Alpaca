@@ -13,7 +13,7 @@ sudo apt install -y libhdf5-dev
 sudo mv /usr/lib/python3.11/EXTERNALLY-MANAGED /usr/lib/python3.11/EXTERNALLY-MANAGED.old
 
 # Install Python packages
-pip3 install yfinance numpy scikit-learn alpaca-trade-api pytz ta-lib
+pip3 install yfinance numpy scikit-learn sklearn alpaca-trade-api pytz ta-lib
 
 # Install PyTorch
 pip3 install torch torchvision
