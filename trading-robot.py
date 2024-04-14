@@ -240,7 +240,8 @@ while True:
         # Print current day trade number out of 3 in 5 days
         print(f"Current day trade count: {day_trade_count}/3 in 5 days")
 
-        if is_trading_hours():
+        if 1 == 1:     #debug code to run 24 hours, 7 days
+        #if is_trading_hours():
             print("Trading hours - executing trades...")
             # Fetch data
             data = fetch_data(symbols_to_buy)
