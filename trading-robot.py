@@ -13,6 +13,7 @@ from sklearn.preprocessing import MinMaxScaler
 import torch
 from torch import nn
 from torch.nn import functional as F
+from sklearn.ensemble import RandomForestRegressor
 
 # Configure logging to write to a file
 logging.basicConfig(filename='trading_bot.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
@@ -107,27 +108,35 @@ def build_and_train_lstm_model(X_train, y_train, window_size):
     return model
 
 
-# Function to save the LSTM model
-def save_lstm_model(model, symbol):
+# Function to build and train the Random Forest model
+def build_and_train_rf_model(X_train, y_train):
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    print("Random Forest model training complete.")
+    return model
+
+# Function to save the model
+def save_model(model, symbol, model_type):
     model_dir = "models"
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
-    model_path = f"{model_dir}/{symbol}_lstm_model.pt"
-    torch.save(model.state_dict(), model_path)
-    print(f"LSTM model for {symbol} saved successfully.")
+    model_path = f"{model_dir}/{symbol}_{model_type}_model.pkl"
+    with open(model_path, 'wb') as file:
+        pickle.dump(model, file)
+    print(f"{model_type} model for {symbol} saved successfully.")
 
-# Function to load the LSTM model
-def load_lstm_model(symbol, window_size):
+# Function to load the model
+def load_model(symbol, model_type):
     model_dir = "models"
-    model_path = f"{model_dir}/{symbol}_lstm_model.pt"
+    model_path = f"{model_dir}/{symbol}_{model_type}_model.pkl"
     if os.path.exists(model_path):
-        model = LSTMModel()
-        model.load_state_dict(torch.load(model_path))
-        print(f"LSTM model for {symbol} loaded successfully.")
+        with open(model_path, 'rb') as file:
+            model = pickle.load(file)
+        print(f"{model_type} model for {symbol} loaded successfully.")
         return model
     else:
-        print(f"No saved LSTM model found for {symbol}. Creating new model...")
-        return build_and_train_lstm_model(X_model, y_model, window_size)
+        print(f"No saved {model_type} model found for {symbol}. Creating new model...")
+        return None
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, cash_available):
@@ -194,35 +203,33 @@ while True:
             split_index = int(len(X) * model_1_data_percentage)
             X_model, y_model = X[:split_index], y[:split_index]
 
-            # Load or create the first LSTM model
-            lstm_model_1 = load_lstm_model(symbol, window_size)
+            # Load or create the first model (LSTM)
+            lstm_model = load_model(symbol, "lstm")
+            if lstm_model is None:
+                lstm_model = build_and_train_lstm_model(X_model, y_model, window_size)
+                save_model(lstm_model, symbol, "lstm")
 
-            # Train the first LSTM model if it's newly created
-            if not os.path.exists(f"models/{symbol}_lstm_model.pt"):
-                lstm_model_1 = build_and_train_lstm_model(X_model, y_model, window_size)
-                save_lstm_model(lstm_model_1, symbol)
-
-            # Load or create the second LSTM model
-            lstm_model_2 = load_lstm_model(symbol, window_size)
-
-            # Train the second LSTM model if it's newly created
-            if not os.path.exists(f"models/{symbol}_lstm_model.pt"):
-                lstm_model_2 = build_and_train_lstm_model(X[split_index:], y[split_index:], window_size)
-                save_lstm_model(lstm_model_2, symbol)
+            # Load or create the second model (Random Forest)
+            rf_model = load_model(symbol, "rf")
+            if rf_model is None:
+                rf_model = build_and_train_rf_model(X_model.reshape(-1, window_size), y_model)
+                save_model(rf_model, symbol, "rf")
 
             # Make predictions using both models
-            lstm_predictions_1 = lstm_model_1(torch.tensor(X[-1:], dtype=torch.float32))
-            lstm_predictions_2 = lstm_model_2(torch.tensor(X[-1:], dtype=torch.float32))
+            lstm_predictions = lstm_model(torch.tensor(X[-1:], dtype=torch.float32))
+            rf_predictions = rf_model.predict(X[-1].reshape(1, -1))
 
             # Combine predictions from both models
-            combined_predictions = (lstm_predictions_1 + lstm_predictions_2) / 2
+            combined_predictions = (lstm_predictions.item() + rf_predictions.item()) / 2
 
             # Execute buy/sell orders based on combined predictions and account information
             cash_available, day_trade_count, positions = get_account_info()
             current_price = scaled_data[-1, -1]  # Last close price
             purchase_price = positions.get(symbol, 0)
 
-            if combined_predictions.item() < current_price * 0.998 and cash_available >= current_price:
+            print(f"Predicted price for {symbol}: {combined_predictions:.2f}")
+
+            if combined_predictions < current_price * 0.998 and cash_available >= current_price:
                 quantity = int(cash_available // current_price)
                 cash_available = submit_buy_order(symbol, quantity, cash_available)
                 print(f"Bought {quantity} shares of {symbol}.")
