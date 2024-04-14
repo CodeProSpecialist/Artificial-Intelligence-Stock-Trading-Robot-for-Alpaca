@@ -7,6 +7,8 @@ sudo add-apt-repository "deb http://developer.download.nvidia.com/compute/machin
 
 sudo apt update
 
+sudo apt-get install cuda-toolkit libcudnn
+
 sudo apt-get install tensorrt
 
 sudo apt-get install libnvinfer7
