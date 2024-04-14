@@ -88,6 +88,10 @@ def create_sequences(data, window_size):
 def build_and_train_lstm_model(X_train, y_train, window_size, model=None):
     if model is None:
         model = LSTMModel(input_size=X_train.shape[2])
+
+    print("First stock price before training:", X_train[0, 0, -1])
+    print("Last stock price before training:", X_train[-1, -1, -1])
+
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     epochs = 50
@@ -105,6 +109,8 @@ def build_and_train_lstm_model(X_train, y_train, window_size, model=None):
             loss.backward()
             optimizer.step()
 
+    print("First stock price after training:", X_train[0, 0, -1])
+    print("Last stock price after training:", X_train[-1, -1, -1])
     print("LSTM model training complete.")
     return model
 
