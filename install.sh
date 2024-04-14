@@ -18,8 +18,6 @@ pip3 install yfinance numpy scikit-learn alpaca-trade-api ta
 # Install PyTorch
 pip3 install torch torchvision
 
-# Ignore errors about not finding TensorRT to run this code without NVidia video cards on
-# every Linux device like a Raspberry Pi.
 
 # Add '/home/x800/.local/bin' to PATH if not already present
 if ! grep -q '/home/x800/.local/bin' ~/.bashrc; then
