@@ -2,6 +2,7 @@
 An Artificial Intelligence Robot for stock trading. 
 
 This is brand new beta code that might work or it might not work. 
+There is more work to be done before this code is working. 
 
 You will need at least a recommended 25 to 50 Gigabytes of free space 
 on your hard drive when installing the dependencies for this robot. 
