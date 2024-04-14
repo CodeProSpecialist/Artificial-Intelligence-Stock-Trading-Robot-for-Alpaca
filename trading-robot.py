@@ -45,7 +45,7 @@ def fetch_data():
     global symbols_to_buy
     try:
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=365 * 2)  # Two years of data
+        start_date = end_date - timedelta(days=365 * 1)  # One year of data
         data = yf.download(symbols_to_buy, start=start_date, end=end_date.strftime('%Y-%m-%d'))
         for symbol in symbols_to_buy:
             time.sleep(1)  # Sleep for 1 second between fetching data for each symbol
