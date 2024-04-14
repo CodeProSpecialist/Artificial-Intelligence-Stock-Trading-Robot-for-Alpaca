@@ -172,7 +172,7 @@ while True:
                 current_price_tensor = torch.tensor(current_price * 0.998)
 
                 # Perform the comparison operation with tensors
-                if lstm_predictions[-1] < current_price_tensor and cash_available >= current_price:
+                if lstm_predictions[-1][0] < current_price_tensor.item() and cash_available >= current_price:
                     quantity = int(cash_available // current_price)  # Buy as many shares as possible
                     cash_available = submit_buy_order(symbol, quantity, cash_available)
                 if day_trade_count < 3:
