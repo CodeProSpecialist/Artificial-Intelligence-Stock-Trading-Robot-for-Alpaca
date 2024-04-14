@@ -9,6 +9,7 @@ import alpaca_trade_api as tradeapi
 import time
 from datetime import datetime, time as dt_time, timedelta
 import pytz
+from ta import add_all_ta_features
 
 # Load environment variables for Alpaca API
 API_KEY_ID = os.getenv('APCA_API_KEY_ID')
@@ -24,8 +25,9 @@ symbols = ['AGQ', 'UGL']
 # Function to fetch historical data
 def fetch_data():
     end_date = datetime.now()
-    start_date = end_date - pd.DateOffset(years=1)
+    start_date = end_date - pd.DateOffset(years=2)
     data = yf.download(symbols, start=start_date, end=end_date.strftime('%Y-%m-%d'))
+    data = add_all_ta_features(data, colprefix='ta_')
     return data
 
 # Function to preprocess data
@@ -125,7 +127,10 @@ while True:
         # Execute buy orders based on predictions and available cash
         for symbol in symbols:
             current_price = data[symbol].iloc[-1]['Close']
-            if predictions[-1] < current_price and cash_available >= current_price:
+            rsi = data[symbol].iloc[-1]['ta_rsi']
+            macd = data[symbol].iloc[-1]['ta_macd']
+            volume = data[symbol].iloc[-1]['Volume']
+            if predictions[-1] < current_price and cash_available >= current_price and rsi < 30 and macd < 0 and volume < 1000000:
                 quantity = int(cash_available // current_price)  # Buy as many shares as possible
                 submit_buy_order(symbol, quantity)
                 cash_available -= quantity * current_price
@@ -139,9 +144,14 @@ while True:
                 symbol = position.symbol
                 purchase_price = float(position.avg_entry_price)
                 current_price = float(position.current_price)
-                if symbol in symbols and current_price > purchase_price:
+                rsi = data[symbol].iloc[-1]['ta_rsi']
+                macd = data[symbol].iloc[-1]['ta_macd']
+                volume = data[symbol].iloc[-1]['Volume']
+                if symbol in symbols and current_price > purchase_price and rsi > 70 and macd > 0 and volume > 1000000:
                     quantity = int(position.qty)
-                    submit_sell_order(symbol, quantity)
+                    # Check if prediction is higher than purchase price
+                    if predictions[-1] > purchase_price:
+                        submit_sell_order(symbol, quantity)
 
     # Retrain the model every 24 hours
     if datetime.now().hour == 0 and datetime.now().minute == 0:
