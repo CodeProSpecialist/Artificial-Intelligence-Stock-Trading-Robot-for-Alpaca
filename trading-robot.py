@@ -228,11 +228,11 @@ def get_stocks_to_trade():
             print(
                 "********************************************************************************************************")
             print(
-                "*   Error: The file electricity-or-utility-stocks-to-buy-list.txt doesn't contain any stock symbols.   *")
+                "*   Error: The file list-of-stocks-to-buy.txt doesn't contain any stock symbols.                       *")
             print(
                 "*   This Robot does not work until you place stock symbols in the file named:                          *")
             print(
-                "*       electricity-or-utility-stocks-to-buy-list.txt                                                  *")
+                "*                     list-of-stocks-to-buy.txt                                                        *")
             print(
                 "********************************************************************************************************")
             print("\n")
@@ -242,7 +242,7 @@ def get_stocks_to_trade():
     except FileNotFoundError:  # keep this under the t in try
         print("\n")
         print("****************************************************************************")
-        print("*   Error: File not found: electricity-or-utility-stocks-to-buy-list.txt   *")
+        print("*   Error: File not found: list-of-stocks-to-buy.txt                       *")
         print("****************************************************************************")
         print("\n")
         return []  # keep this under the p in print
