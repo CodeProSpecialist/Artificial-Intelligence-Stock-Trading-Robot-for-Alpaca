@@ -1,20 +1,26 @@
-import logging
 import os
 import pickle
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import numpy as np
 import pytz
 import yfinance as yf
 import talib
-import alpaca_trade_api as tradeapi
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 import torch
 from torch import nn
-from torch.nn import functional as F
+import alpaca_trade_api as tradeapi
 
-# Define the LSTMModel class outside the function
+# Configure Alpaca API
+API_KEY_ID = os.getenv('APCA_API_KEY_ID')
+API_SECRET_KEY = os.getenv('APCA_API_SECRET_KEY')
+API_BASE_URL = os.getenv('APCA_API_BASE_URL')
+
+# Initialize Alpaca API
+api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
+
+# Define the LSTMModel class
 class LSTMModel(nn.Module):
     def __init__(self, input_size):
         super(LSTMModel, self).__init__()
@@ -32,14 +38,6 @@ class LSTMModel(nn.Module):
         relu_output = self.relu(fc1_output)
         output = self.fc2(relu_output)
         return output
-
-# Load environment variables for Alpaca API
-API_KEY_ID = os.getenv('APCA_API_KEY_ID')
-API_SECRET_KEY = os.getenv('APCA_API_SECRET_KEY')
-API_BASE_URL = os.getenv('APCA_API_BASE_URL')
-
-# Initialize the Alpaca API
-api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
 # Function to preprocess data
 def preprocess_data(data):
@@ -99,13 +97,56 @@ def create_sequences(data, window_size):
         y.append(data[i + window_size, 0])  # Predict next close price
     return np.array(X), np.array(y)
 
-# Function to load the LSTM model from a file
-def load_model(filename):
-    try:
-        with open(f"models/{filename}.pkl", "rb") as f:
-            return pickle.load(f)
-    except FileNotFoundError:
-        return None
+# Function to load or create the LSTM model
+def load_or_create_model(filename, input_size):
+    model_dir = 'brain_models'
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+
+    model_path = os.path.join(model_dir, f"{filename}.pkl")
+    if os.path.exists(model_path):
+        # Load the existing model
+        with open(model_path, "rb") as f:
+            model = pickle.load(f)
+        print(f"Loaded existing model from {model_path}")
+    else:
+        # Create a new model
+        model = LSTMModel(input_size)
+        print(f"Created new model")
+
+    return model
+
+# Function to submit buy order
+def submit_buy_order(symbol, quantity, target_buy_price):
+    account_info = api.get_account()
+    cash_available = float(account_info.cash)
+    current_price = api.get_last_trade(symbol).price
+
+    if current_price <= target_buy_price and cash_available >= current_price:
+        api.submit_order(
+            symbol=symbol,
+            qty=quantity,
+            side='buy',
+            type='market',
+            time_in_force='gtc'
+        )
+        print(f"Bought {quantity} shares of {symbol} at ${current_price:.2f}")
+
+# Function to submit sell order
+def submit_sell_order(symbol, quantity, target_sell_price):
+    account_info = api.get_account()
+    day_trade_count = account_info.daytrade_count
+    current_price = api.get_last_trade(symbol).price
+
+    if current_price >= target_sell_price and day_trade_count < 3:
+        api.submit_order(
+            symbol=symbol,
+            qty=quantity,
+            side='sell',
+            type='market',
+            time_in_force='gtc'
+        )
+        print(f"Sold {quantity} shares of {symbol} at ${current_price:.2f}")
 
 # Main loop
 while True:
@@ -113,79 +154,46 @@ while True:
         symbols_to_buy = ['AGQ', 'UGL']  # Example symbols to buy
         window_size = 10  # Example window size for LSTM
 
-        # Print current date and time in Eastern Time
-        eastern = pytz.timezone('US/Eastern')
-        current_time = datetime.now(eastern)
-        print(f"Starting main loop at {current_time.strftime('%Y-%m-%d %H:%M:%S')} (Eastern Time)")
-
-        # Initialize lists to store data for all symbols
-        X_all, y_all = [], []
-
-        # Process each symbol
         for symbol in symbols_to_buy:
             print(f"Processing {symbol}...")
+            historical_data = calculate_technical_indicators(symbol)
 
-            # Fetch and calculate technical indicators
-            technical_data = calculate_technical_indicators(symbol)
-            if technical_data is None:
-                continue
+            if historical_data is not None:
+                # Preprocess data
+                data = historical_data[['Open', 'High', 'Low', 'Close', 'Volume']].values
+                scaled_data, scaler = preprocess_data(data)
 
-            # Preprocess data
-            data, _ = preprocess_data(technical_data.values)
+                # Create sequences for LSTM
+                X, y = create_sequences(scaled_data, window_size)
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-            # Create sequences for LSTM
-            X, y = create_sequences(data, window_size)
+                # Load or create LSTM model
+                model = load_or_create_model(symbol, input_size=X_train.shape[2])
 
-            # Append data for this symbol to the overall lists
-            X_all.append(X)
-            y_all.append(y)
+                # Train LSTM model
+                model.fit(X_train, y_train, epochs=50, batch_size=32)
 
-        # Concatenate data for all symbols
-        X_combined = np.concatenate(X_all)
-        y_combined = np.concatenate(y_all)
+                # Save LSTM model
+                model_path = os.path.join('brain_models', f"{symbol}.pkl")
+                with open(model_path, "wb") as f:
+                    pickle.dump(model, f)
+                print(f"LSTM model for {symbol} saved successfully")
 
-        # Split data into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X_combined, y_combined, test_size=0.2, shuffle=False)
+                # Make predictions
+                predictions = model.predict(X_test)
 
-        # Train the LSTM model
-        model = LSTMModel(input_size=X_train.shape[2])
+                # Get target buy price and target sell price
+                target_buy_price = np.min(historical_data['Low'])
+                target_sell_price = np.max(historical_data['High'])
 
-        criterion = nn.MSELoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-        epochs = 50
-        batch_size = 32
+                # Submit buy and sell orders
+                submit_buy_order(symbol, 1, target_buy_price)
+                submit_sell_order(symbol, 1, target_sell_price)
 
-        for epoch in range(epochs):
-            for i in range(0, len(X_train), batch_size):
-                batch_X = torch.tensor(X_train[i:i + batch_size], dtype=torch.float32)
-                batch_y = torch.tensor(y_train[i:i + batch_size], dtype=torch.float32).unsqueeze(-1)
-                optimizer.zero_grad()
-                output = model(batch_X)
-                loss = criterion(output, batch_y)
-                loss.backward()
-                optimizer.step()
-
-            print(f"Epoch {epoch + 1}/{epochs} - Loss: {loss.item():.4f}")
-
-        # Save the trained model
-        model_filename = 'lstm_model'
-        with open(f"models/{model_filename}.pkl", "wb") as f:
-            pickle.dump(model, f)
-        print(f"{model_filename} saved successfully.")
-
-        # Make predictions
-        predictions = model(torch.tensor(X_test, dtype=torch.float32))
-
-        # Evaluate the model
-        test_loss = criterion(predictions, torch.tensor(y_test, dtype=torch.float32).unsqueeze(-1))
-        print(f"Test Loss: {test_loss.item():.4f}")
-
-        # Execute buy/sell orders based on predictions and account information
-        # (Code for this part is omitted for brevity)
+        # Wait for next iteration
+        print("Waiting for next iteration...")
+        time.sleep(60)
 
     except Exception as e:
-        logging.error(f"Error occurred: {str(e)}")
         print(f"Error occurred: {str(e)}")
-
-    print("Waiting for next iteration...")
-    time.sleep(60)
+        time.sleep(60)
