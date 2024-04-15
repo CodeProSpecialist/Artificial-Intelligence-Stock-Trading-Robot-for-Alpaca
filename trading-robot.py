@@ -147,7 +147,7 @@ def submit_sell_order(symbol, quantity, target_sell_price):
     open_orders = api.list_orders(status='open', symbol=symbol)
     if open_orders:
         print(f"There is an open sell order for {symbol}. Skipping sell order.")
-            continue  # Skip to the next iteration if there's an open sell order
+        continue  # Skip to the next iteration if there's an open sell order
 
     # Never calculate ATR for a buy price or sell price because it is too slow. 1 second per stock.
     # Sell stocks if the current price is more than 0.5% higher than the purchase price.
