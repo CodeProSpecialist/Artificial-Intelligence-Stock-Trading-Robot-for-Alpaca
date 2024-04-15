@@ -1,7 +1,7 @@
 # Artificial-Intelligence-Stock-Trading-Robot-for-Alpaca
 An Artificial Intelligence Robot for stock trading. 
 
-This is brand new beta code that might work or it might not work. 
+This is brand new beta code that seems to be working so far. 
 
 
 You will need at least a recommended 25 to 50 Gigabytes of free space 
