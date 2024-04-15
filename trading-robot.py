@@ -10,6 +10,9 @@ import torch
 from torch import nn
 import alpaca_trade_api as tradeapi
 import logging
+from datetime import datetime, timedelta, date
+from datetime import time as time2
+import pytz
 
 # Configure Alpaca API
 API_KEY_ID = os.getenv('APCA_API_KEY_ID')
@@ -43,6 +46,44 @@ class LSTMModel(nn.Module):
         output = self.fc2(relu_output)
         return output
 
+def stop_if_stock_market_is_closed():
+    # Check if the current time is within the stock market hours
+    # Set the stock market open and close times
+    market_open_time = time2(9, 27)
+    market_close_time = time2(16, 0)
+
+    while True:
+        # Get the current time in Eastern Time
+        eastern = pytz.timezone('US/Eastern')
+        now = datetime.now(eastern)
+        current_time = now.time()
+
+        # Check if the current time is within market hours
+        if now.weekday() <= 4 and market_open_time <= current_time <= market_close_time:
+            break
+
+        print("\n")
+        print('''
+
+            2024 Edition of the Artificial Intelligence Stock Trading Robot 
+           _____   __                   __             ____            __            __ 
+          / ___/  / /_  ____   _____   / /__          / __ \  ____    / /_   ____   / /_
+          \__ \  / __/ / __ \ / ___/  / //_/         / /_/ / / __ \  / __ \ / __ \ / __/
+         ___/ / / /_  / /_/ // /__   / ,<           / _, _/ / /_/ / / /_/ // /_/ // /_  
+        /____/  \__/  \____/ \___/  /_/|_|         /_/ |_|  \____/ /_.___/ \____/ \__/  
+
+                                                  https://github.com/CodeProSpecialist
+
+                       Featuring Neural Network Learning and Decision Making   
+
+         ''')
+        print(f'Current date & time (Eastern Time): {now.strftime("%A, %B %d, %Y, %I:%M:%S %p")}')
+        print("Stockbot only works Monday through Friday: 9:30 am - 4:00 pm Eastern Time.")
+        print("Stockbot begins watching stock prices early at 9:27 am Eastern Time.")
+        print("Waiting until Stock Market Hours to begin the Stockbot Trading Program.")
+        print("\n")
+        print("\n")
+        time.sleep(60)  # Sleep for 1 minute and check again. Keep this under the p in print.
 
 # Function to log error messages
 def log_error(message):
@@ -207,14 +248,34 @@ def get_stocks_to_trade():
 # Main loop
 while True:
     try:
+        stop_if_stock_market_is_closed()  # comment this line to debug the Python code
+        now = datetime.now(pytz.timezone('US/Eastern'))
+        current_time_str = now.strftime("Eastern Time | %I:%M:%S %p | %m-%d-%Y |")
+
+        cash_balance = round(float(api.get_account().cash), 2)
+        print("------------------------------------------------------------------------------------")
+        print(" 2024 Edition of the Artificial Intelligence Stock Trading Robot ")
+        print("by https://github.com/CodeProSpecialist")
+        print("------------------------------------------------------------------------------------")
+        print(f"  {current_time_str} Cash Balance: ${cash_balance}")
+        day_trade_count = api.get_account().daytrade_count
+        print("\n")
+        print(f"Current day trade number: {day_trade_count} out of 3 in 5 business days")
+        print("\n")
+
+        print("------------------------------------------------------------------------------------")
+        print("\n")
+
         window_size = 10  # Example window size for LSTM
 
         # Get the list of stock symbols to trade
         symbols = get_stocks_to_trade()
 
         for symbol in symbols:
+            print("\n")
             print(f"Processing {symbol}...")
-
+            print("\n")
+            time.sleep(1)
             # Fetch historical data for the stock symbol
             historical_data = calculate_technical_indicators(symbol)
 
@@ -228,7 +289,9 @@ while True:
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
                 # Load or create LSTM model
-                print(f"Training LSTM model for {symbol}...")
+                print("\n")
+                print(f"Training LSTM brain model for {symbol}.....")
+                print("\n")
                 model = load_or_create_model(symbol, input_size=X_train.shape[2])
 
                 # Train LSTM model
@@ -253,7 +316,8 @@ while True:
                         loss.backward()
                         optimizer.step()
 
-                print(f"Training of LSTM model for {symbol} completed.")
+                print(f"Training of LSTM brain model for {symbol} completed.")
+                print("\n")
 
                 # Save LSTM model
                 model_path = os.path.join('brain_models', f"{symbol}.pkl")
@@ -269,17 +333,21 @@ while True:
                 target_buy_price = np.min(historical_data['Low'])
                 target_sell_price = np.max(historical_data['High'])
 
+                print("\n")
                 # Print target buy and sell prices
                 print(f"Predicted target buy price for {symbol}: {target_buy_price:.2f}")
                 print(f"Predicted target sell price for {symbol}: {target_sell_price:.2f}")
+                print("\n")
 
                 # Submit buy and sell orders
                 submit_buy_order(symbol, 1, target_buy_price)
                 submit_sell_order(symbol, 1, target_sell_price)
 
         # Wait for next iteration
-        print("Waiting 45 seconds.....")
-        time.sleep(45)
+        print("\n")
+        print("Waiting 30 seconds.....")
+        print("\n")
+        time.sleep(30)
 
     except Exception as e:
         log_error(f"Error occurred: {str(e)}")
