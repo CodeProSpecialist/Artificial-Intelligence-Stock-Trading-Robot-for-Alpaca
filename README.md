@@ -1,8 +1,9 @@
 # Artificial-Intelligence-Stock-Trading-Robot-for-Alpaca
 An Artificial Intelligence Robot for stock trading. 
 
-This is brand new beta code that seems to be working so far. 
+This robot features neural network functionality to train, learn, and make trading decisions.  
 
+This is one of the favorite trading robots of CodeProSpecialist. 
 
 You will need at least a recommended 25 to 50 Gigabytes of free space 
 on your hard drive when installing the dependencies for this robot. 
