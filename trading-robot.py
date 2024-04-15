@@ -9,6 +9,7 @@ from sklearn.preprocessing import MinMaxScaler
 import torch
 from torch import nn
 import alpaca_trade_api as tradeapi
+import logging
 
 # Configure Alpaca API
 API_KEY_ID = os.getenv('APCA_API_KEY_ID')
@@ -43,16 +44,22 @@ class LSTMModel(nn.Module):
         output = self.fc2(relu_output)
         return output
 
+# Function to log error messages
+def log_error(message):
+    logging.error(message)
 
 # Function to preprocess data
 def preprocess_data(data):
-    # Fill NaN values with zeros
-    data = np.nan_to_num(data)
+    try:
+        # Fill NaN values with zeros
+        data = np.nan_to_num(data)
 
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(data)
-    return scaled_data, scaler
-
+        scaler = MinMaxScaler()
+        scaled_data = scaler.fit_transform(data)
+        return scaled_data, scaler
+    except Exception as e:
+        log_error(f"Error in preprocess_data: {str(e)}")
+        raise
 
 # Function to calculate MACD, RSI, and Volume for the last 14 days
 def calculate_technical_indicators(symbol):
@@ -87,14 +94,15 @@ def calculate_technical_indicators(symbol):
         rsi = talib.RSI(historical_data['Close'], timeperiod=rsi_period)
         historical_data['rsi'] = rsi
 
-        # Volume is already present in historical_data
+        # Include volume
+        volume = historical_data['Volume']
+        historical_data['volume'] = volume
 
         return historical_data
 
     except Exception as e:
-        print(f"Error processing {symbol}: {str(e)}")
-        return None
-
+        log_error(f"Error in calculate_technical_indicators for symbol {symbol}: {str(e)}")
+        raise
 
 # Function to create sequences for LSTM
 def create_sequences(data, window_size):
@@ -131,7 +139,7 @@ def submit_buy_order(symbol, quantity, target_buy_price):
     cash_available = float(account_info.cash)
     current_price = get_current_price(symbol)
 
-    if current_price >= target_buy_price and cash_available >= current_price:
+    if current_price <= target_buy_price and cash_available >= current_price:
         api.submit_order(
             symbol=symbol,
             qty=quantity,
@@ -195,20 +203,24 @@ def get_stocks_to_trade():
         print("\n")
         return []  # keep this under the p in print
 
+
 # Main loop
 while True:
     try:
         window_size = 10  # Example window size for LSTM
 
-        get_stocks_to_trade()
+        # Get the list of stock symbols to trade
+        symbols = get_stocks_to_trade()
 
-        for symbol in get_stocks_to_trade():
+        for symbol in symbols:
             print(f"Processing {symbol}...")
+
+            # Fetch historical data for the stock symbol
             historical_data = calculate_technical_indicators(symbol)
 
             if historical_data is not None:
                 # Preprocess data
-                data = historical_data[['Open', 'High', 'Low', 'Close', 'Volume']].values
+                data = historical_data[['Open', 'High', 'Low', 'Close', 'Volume', 'macd', 'signal', 'rsi']].values
                 scaled_data, scaler = preprocess_data(data)
 
                 # Create sequences for LSTM
@@ -216,6 +228,7 @@ while True:
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
                 # Load or create LSTM model
+                print(f"Training LSTM model for {symbol}...")
                 model = load_or_create_model(symbol, input_size=X_train.shape[2])
 
                 # Train LSTM model
@@ -233,6 +246,8 @@ while True:
                         loss = criterion(output, batch_y)
                         loss.backward()
                         optimizer.step()
+
+                print(f"Training of LSTM model for {symbol} completed.")
 
                 # Save LSTM model
                 model_path = os.path.join('brain_models', f"{symbol}.pkl")
@@ -257,9 +272,10 @@ while True:
                 submit_sell_order(symbol, 1, target_sell_price)
 
         # Wait for next iteration
-        print("Waiting for next iteration...")
-        time.sleep(60)
+        print("Waiting 45 seconds.....")
+        time.sleep(45)
 
     except Exception as e:
+        log_error(f"Error occurred: {str(e)}")
         print(f"Error occurred: {str(e)}")
         time.sleep(60)
