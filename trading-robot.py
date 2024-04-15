@@ -18,6 +18,10 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
+def get_current_price(symbol):
+    stock_data = yf.Ticker(symbol)
+    return round(stock_data.history(period='1d')['Close'].iloc[0], 4)
+
 # Define the LSTMModel class
 class LSTMModel(nn.Module):
     def __init__(self, input_size):
@@ -118,7 +122,7 @@ def load_or_create_model(filename, input_size):
 def submit_buy_order(symbol, quantity, target_buy_price):
     account_info = api.get_account()
     cash_available = float(account_info.cash)
-    current_price = api.get_last_trade(symbol).price
+    current_price = get_current_price(symbol)
 
     if current_price <= target_buy_price and cash_available >= current_price:
         api.submit_order(
@@ -134,7 +138,7 @@ def submit_buy_order(symbol, quantity, target_buy_price):
 def submit_sell_order(symbol, quantity, target_sell_price):
     account_info = api.get_account()
     day_trade_count = account_info.daytrade_count
-    current_price = api.get_last_trade(symbol).price
+    current_price = get_current_price(symbol)
 
     if current_price >= target_sell_price and day_trade_count < 3:
         api.submit_order(
