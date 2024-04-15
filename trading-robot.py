@@ -1,9 +1,7 @@
 import os
 import pickle
 import time
-from datetime import datetime
 import numpy as np
-import pytz
 import yfinance as yf
 import talib
 from sklearn.model_selection import train_test_split
@@ -171,7 +169,20 @@ while True:
                 model = load_or_create_model(symbol, input_size=X_train.shape[2])
 
                 # Train LSTM model
-                model.fit(X_train, y_train, epochs=50, batch_size=32)
+                criterion = nn.MSELoss()
+                optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+                epochs = 50
+                batch_size = 32
+
+                for epoch in range(epochs):
+                    for i in range(0, len(X_train), batch_size):
+                        batch_X = torch.tensor(X_train[i:i + batch_size], dtype=torch.float32)
+                        batch_y = torch.tensor(y_train[i:i + batch_size], dtype=torch.float32).unsqueeze(-1)
+                        optimizer.zero_grad()
+                        output = model(batch_X)
+                        loss = criterion(output, batch_y)
+                        loss.backward()
+                        optimizer.step()
 
                 # Save LSTM model
                 model_path = os.path.join('brain_models', f"{symbol}.pkl")
@@ -180,11 +191,16 @@ while True:
                 print(f"LSTM model for {symbol} saved successfully")
 
                 # Make predictions
-                predictions = model.predict(X_test)
+                with torch.no_grad():
+                    predictions = model(torch.tensor(X_test, dtype=torch.float32))
 
                 # Get target buy price and target sell price
                 target_buy_price = np.min(historical_data['Low'])
                 target_sell_price = np.max(historical_data['High'])
+
+                # Print target buy and sell prices
+                print(f"Predicted target buy price for {symbol}: {target_buy_price:.2f}")
+                print(f"Predicted target sell price for {symbol}: {target_sell_price:.2f}")
 
                 # Submit buy and sell orders
                 submit_buy_order(symbol, 1, target_buy_price)
