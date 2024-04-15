@@ -102,6 +102,14 @@ def create_sequences(data, window_size):
         y.append(data[i + window_size, 0])  # Predict next close price
     return np.array(X), np.array(y)
 
+# Function to load the LSTM model from a file
+def load_model(filename):
+    try:
+        with open(f"models/{filename}.pkl", "rb") as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        return None
+
 # Main loop
 while True:
     try:
