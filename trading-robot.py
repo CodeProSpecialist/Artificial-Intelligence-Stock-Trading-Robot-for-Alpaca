@@ -85,6 +85,9 @@ def stop_if_stock_market_is_closed():
         print("\n")
         time.sleep(60)  # Sleep for 1 minute and check again. Keep this under the p in print.
 
+
+logging.basicConfig(filename='trading-bot-program-logging-messages.txt', level=logging.INFO)
+
 # Function to log error messages
 def log_error(message):
     logging.error(message)
