@@ -24,16 +24,15 @@ def get_current_price(symbol):
     stock_data = yf.Ticker(symbol)
     return round(stock_data.history(period='1d')['Close'].iloc[0], 4)
 
-
 # Define the LSTMModel class
 class LSTMModel(nn.Module):
     def __init__(self, input_size):
         super(LSTMModel, self).__init__()
-        self.lstm = nn.LSTM(input_size=input_size, hidden_size=64, num_layers=2, batch_first=True)
-        self.dropout = nn.Dropout(0.2)
-        self.fc1 = nn.Linear(64, 32)
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=128, num_layers=3, batch_first=True)
+        self.dropout = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(128, 64)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(32, 1)
+        self.fc2 = nn.Linear(64, 1)
 
     def forward(self, x):
         lstm_output, _ = self.lstm(x)
@@ -43,6 +42,7 @@ class LSTMModel(nn.Module):
         relu_output = self.relu(fc1_output)
         output = self.fc2(relu_output)
         return output
+
 
 # Function to log error messages
 def log_error(message):
@@ -232,11 +232,17 @@ while True:
                 model = load_or_create_model(symbol, input_size=X_train.shape[2])
 
                 # Train LSTM model
+                # Adjust training parameters
                 criterion = nn.MSELoss()
-                optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-                epochs = 50
-                batch_size = 32
+                optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)  # Increase or Decrease lr or learning rate
+                epochs = 100
+                batch_size = 64  # Increase batch size
 
+                # Create sequences for LSTM
+                X, y = create_sequences(scaled_data, window_size)
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+                # Train LSTM model
                 for epoch in range(epochs):
                     for i in range(0, len(X_train), batch_size):
                         batch_X = torch.tensor(X_train[i:i + batch_size], dtype=torch.float32)
