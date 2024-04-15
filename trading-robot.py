@@ -18,9 +18,11 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
+
 def get_current_price(symbol):
     stock_data = yf.Ticker(symbol)
     return round(stock_data.history(period='1d')['Close'].iloc[0], 4)
+
 
 # Define the LSTMModel class
 class LSTMModel(nn.Module):
@@ -41,6 +43,7 @@ class LSTMModel(nn.Module):
         output = self.fc2(relu_output)
         return output
 
+
 # Function to preprocess data
 def preprocess_data(data):
     # Fill NaN values with zeros
@@ -49,6 +52,7 @@ def preprocess_data(data):
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(data)
     return scaled_data, scaler
+
 
 # Function to calculate MACD, RSI, and Volume for the last 14 days
 def calculate_technical_indicators(symbol):
@@ -72,9 +76,9 @@ def calculate_technical_indicators(symbol):
         long_window = 26
         signal_window = 9
         macd, signal, _ = talib.MACD(historical_data['Close'],
-                                      fastperiod=short_window,
-                                      slowperiod=long_window,
-                                      signalperiod=signal_window)
+                                     fastperiod=short_window,
+                                     slowperiod=long_window,
+                                     signalperiod=signal_window)
         historical_data['macd'] = macd
         historical_data['signal'] = signal
 
@@ -91,6 +95,7 @@ def calculate_technical_indicators(symbol):
         print(f"Error processing {symbol}: {str(e)}")
         return None
 
+
 # Function to create sequences for LSTM
 def create_sequences(data, window_size):
     X, y = [], []
@@ -98,6 +103,7 @@ def create_sequences(data, window_size):
         X.append(data[i:i + window_size])
         y.append(data[i + window_size, 0])  # Predict next close price
     return np.array(X), np.array(y)
+
 
 # Function to load or create the LSTM model
 def load_or_create_model(filename, input_size):
@@ -118,6 +124,7 @@ def load_or_create_model(filename, input_size):
 
     return model
 
+
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, target_buy_price):
     account_info = api.get_account()
@@ -134,11 +141,12 @@ def submit_buy_order(symbol, quantity, target_buy_price):
         )
         print(f"Bought {quantity} shares of {symbol} at ${current_price:.2f}")
 
+
 # Function to submit sell order
 def submit_sell_order(symbol, quantity, target_sell_price):
     account_info = api.get_account()
     day_trade_count = account_info.daytrade_count
-    
+
     current_price = get_current_price(symbol)  # keep this under the "o" in "bought"
     position = api.get_position(symbol)  # keep this under the "o" in "bought"
     bought_price = float(position.avg_entry_price)  # keep this under the "o" in "bought"
@@ -147,12 +155,12 @@ def submit_sell_order(symbol, quantity, target_sell_price):
     open_orders = api.list_orders(status='open', symbol=symbol)
     if open_orders:
         print(f"There is an open sell order for {symbol}. Skipping sell order.")
-        continue  # Skip to the next iteration if there's an open sell order
+        pass  # Skip to the next iteration if there's an open sell order
 
     # Never calculate ATR for a buy price or sell price because it is too slow. 1 second per stock.
     # Sell stocks if the current price is more than 0.5% higher than the purchase price.
-    #if current_price >= bought_price * 1.005:  # keep this under the "o" in "bought"
-    
+    # if current_price >= bought_price * 1.005:  # keep this under the "o" in "bought"
+
     if current_price >= target_sell_price and day_trade_count < 3 and current_price >= bought_price * 1.005:
         api.submit_order(
             symbol=symbol,
@@ -162,6 +170,7 @@ def submit_sell_order(symbol, quantity, target_sell_price):
             time_in_force='gtc'
         )
         print(f"Sold {quantity} shares of {symbol} at ${current_price:.2f}")
+
 
 # Main loop
 while True:
