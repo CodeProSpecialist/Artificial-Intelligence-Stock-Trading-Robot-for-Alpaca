@@ -166,13 +166,43 @@ def submit_sell_order(symbol, quantity, target_sell_price):
         print(f"Sold {quantity} shares of {symbol} at ${current_price:.2f}")
 
 
+def get_stocks_to_trade():
+    try:
+        with open('list-of-stocks-to-buy.txt', 'r') as file:
+            symbols = [line.strip() for line in file.readlines()]
+
+        if not symbols:  # keep this under the w in with
+            print("\n")
+            print(
+                "********************************************************************************************************")
+            print(
+                "*   Error: The file electricity-or-utility-stocks-to-buy-list.txt doesn't contain any stock symbols.   *")
+            print(
+                "*   This Robot does not work until you place stock symbols in the file named:                          *")
+            print(
+                "*       electricity-or-utility-stocks-to-buy-list.txt                                                  *")
+            print(
+                "********************************************************************************************************")
+            print("\n")
+
+        return symbols  # keep this under the i in if
+
+    except FileNotFoundError:  # keep this under the t in try
+        print("\n")
+        print("****************************************************************************")
+        print("*   Error: File not found: electricity-or-utility-stocks-to-buy-list.txt   *")
+        print("****************************************************************************")
+        print("\n")
+        return []  # keep this under the p in print
+
 # Main loop
 while True:
     try:
-        symbols_to_buy = ['AGQ', 'UGL']  # Example symbols to buy
         window_size = 10  # Example window size for LSTM
 
-        for symbol in symbols_to_buy:
+        get_stocks_to_trade()
+
+        for symbol in get_stocks_to_trade():
             print(f"Processing {symbol}...")
             historical_data = calculate_technical_indicators(symbol)
 
