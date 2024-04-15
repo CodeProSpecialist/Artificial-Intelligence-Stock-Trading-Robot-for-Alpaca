@@ -44,14 +44,14 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize the Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
-# Function to calculate MACD, RSI, and Volume
-def calculate_technical_indicators(symbol, lookback_days=90):
+# Function to calculate MACD, RSI, and Volume for the last 14 days
+def calculate_technical_indicators(symbol):
     stock_data = yf.Ticker(symbol)
-    historical_data = stock_data.history(period=f'{lookback_days}d')
+    historical_data = stock_data.history(period='14d')  # Fetch data for the last 14 days
 
-    # Print fetched historical data
-    print("Fetched historical data:")
-    print(historical_data)
+    # Print the latest closing price
+    latest_closing_price = historical_data['Close'].iloc[-1]
+    print(f"Latest closing price for {symbol}: {latest_closing_price:.2f}")
 
     # Calculate MACD
     short_window = 12
