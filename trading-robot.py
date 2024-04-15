@@ -138,9 +138,22 @@ def submit_buy_order(symbol, quantity, target_buy_price):
 def submit_sell_order(symbol, quantity, target_sell_price):
     account_info = api.get_account()
     day_trade_count = account_info.daytrade_count
-    current_price = get_current_price(symbol)
+    
+    current_price = get_current_price(symbol)  # keep this under the "o" in "bought"
+    position = api.get_position(symbol)  # keep this under the "o" in "bought"
+    bought_price = float(position.avg_entry_price)  # keep this under the "o" in "bought"
 
-    if current_price >= target_sell_price and day_trade_count < 3:
+    # Check if there is an open sell order for the symbol
+    open_orders = api.list_orders(status='open', symbol=symbol)
+    if open_orders:
+        print(f"There is an open sell order for {symbol}. Skipping sell order.")
+            continue  # Skip to the next iteration if there's an open sell order
+
+    # Never calculate ATR for a buy price or sell price because it is too slow. 1 second per stock.
+    # Sell stocks if the current price is more than 0.5% higher than the purchase price.
+    #if current_price >= bought_price * 1.005:  # keep this under the "o" in "bought"
+    
+    if current_price >= target_sell_price and day_trade_count < 3 and current_price >= bought_price * 1.005:
         api.submit_order(
             symbol=symbol,
             qty=quantity,
