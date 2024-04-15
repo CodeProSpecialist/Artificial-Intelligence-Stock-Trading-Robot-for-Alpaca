@@ -44,137 +44,55 @@ API_BASE_URL = os.getenv('APCA_API_BASE_URL')
 # Initialize the Alpaca API
 api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
-# Function to calculate MACD, RSI, and Volume for the last 14 days
-def calculate_technical_indicators(symbol):
-    stock_data = yf.Ticker(symbol)
-    historical_data = stock_data.history(period='14d')  # Fetch data for the last 14 days
-
-    # Print the latest closing price
-    latest_closing_price = historical_data['Close'].iloc[-1]
-    print(f"Latest closing price for {symbol}: {latest_closing_price:.2f}")
-
-    # Calculate MACD
-    short_window = 12
-    long_window = 26
-    signal_window = 9
-    macd, signal, _ = talib.MACD(historical_data['Close'],
-                                  fastperiod=short_window,
-                                  slowperiod=long_window,
-                                  signalperiod=signal_window)
-    historical_data['macd'] = macd
-    historical_data['signal'] = signal
-
-    # Calculate RSI
-    rsi_period = 14
-    rsi = talib.RSI(historical_data['Close'], timeperiod=rsi_period)
-    historical_data['rsi'] = rsi
-
-    # Volume is already present in historical_data
-
-    return historical_data
-
 # Function to preprocess data
 def preprocess_data(data):
+    # Fill NaN values with zeros
+    data = np.nan_to_num(data)
+
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(data)
     return scaled_data, scaler
 
-# Function to create sequences for LSTM
-def create_sequences(data, window_size):
-    X, y = [], []
-    for i in range(len(data) - window_size):
-        X.append(data[i:i + window_size])
-        y.append(data[i + window_size, 0])  # Predict next close price
-    return np.array(X), np.array(y)
+# Function to calculate MACD, RSI, and Volume for the last 14 days
+def calculate_technical_indicators(symbol):
+    try:
+        stock_data = yf.Ticker(symbol)
+        historical_data = stock_data.history(period='14d')  # Fetch data for the last 14 days
 
-# Function to build and train the LSTM model
-def build_and_train_lstm_model(X_train, y_train, window_size, model=None):
-    if model is None:
-        model = LSTMModel(input_size=X_train.shape[2])
+        if historical_data.empty:
+            print(f"No historical data found for {symbol}.")
+            return None
 
-    print("First stock price before training:", round(X_train[0, 0, -1], 2))
-    print("Last stock price before training:", round(X_train[-1, -1, -1], 2))
+        # Print the latest closing price
+        latest_closing_price = historical_data['Close'].iloc[-1]
+        print(f"Latest closing price for {symbol}: {latest_closing_price:.2f}")
 
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    epochs = 50
-    batch_size = 32
+        # Check for NaN values and remove corresponding rows
+        historical_data = historical_data.dropna()
 
-    # Start training
-    print("Training LSTM model...")
-    for epoch in range(epochs):
-        for i in range(0, len(X_train), batch_size):
-            batch_X = torch.tensor(X_train[i:i + batch_size], dtype=torch.float32)
-            batch_y = torch.tensor(y_train[i:i + batch_size], dtype=torch.float32).unsqueeze(-1)
-            optimizer.zero_grad()
-            output = model(batch_X)
-            loss = criterion(output, batch_y)
-            loss.backward()
-            optimizer.step()
+        # Calculate MACD
+        short_window = 12
+        long_window = 26
+        signal_window = 9
+        macd, signal, _ = talib.MACD(historical_data['Close'],
+                                      fastperiod=short_window,
+                                      slowperiod=long_window,
+                                      signalperiod=signal_window)
+        historical_data['macd'] = macd
+        historical_data['signal'] = signal
 
-    print("First stock price after training:", round(X_train[0, 0, -1], 2))
-    print("Last stock price after training:", round(X_train[-1, -1, -1], 2))
-    print("LSTM model training complete.")
-    return model
+        # Calculate RSI
+        rsi_period = 14
+        rsi = talib.RSI(historical_data['Close'], timeperiod=rsi_period)
+        historical_data['rsi'] = rsi
 
-# Function to save the model
-def save_model(model, model_type):
-    model_dir = "models"
-    if not os.path.exists(model_dir):
-        os.makedirs(model_dir)
-    model_path = f"{model_dir}/{model_type}_model.pkl"
-    with open(model_path, 'wb') as file:
-        pickle.dump(model, file)
-    print(f"{model_type} model saved successfully.")
+        # Volume is already present in historical_data
 
-# Function to load the model
-def load_model(model_type):
-    model_dir = "models"
-    model_path = f"{model_dir}/{model_type}_model.pkl"
-    if os.path.exists(model_path):
-        with open(model_path, 'rb') as file:
-            model = pickle.load(file)
-        print(f"{model_type} model loaded successfully.")
-        return model
-    else:
-        print(f"No saved {model_type} model found. Creating new model...")
+        return historical_data
+
+    except Exception as e:
+        print(f"Error processing {symbol}: {str(e)}")
         return None
-
-# Function to submit buy order
-def submit_buy_order(symbol, quantity, cash_available):
-    current_price = api.get_last_trade(symbol).price
-    api.submit_order(
-        symbol=symbol,
-        qty=quantity,
-        side='buy',
-        type='market',
-        time_in_force='gtc'
-    )
-    # Update cash available after buying stocks
-    cash_available -= quantity * current_price
-    return cash_available
-
-# Function to submit sell order
-def submit_sell_order(symbol, quantity, cash_available):
-    current_price = api.get_last_trade(symbol).price
-    api.submit_order(
-        symbol=symbol,
-        qty=quantity,
-        side='sell',
-        type='market',
-        time_in_force='gtc'
-    )
-    # Update cash available after selling stocks
-    cash_available += quantity * current_price
-    return cash_available
-
-# Function to get account information
-def get_account_info():
-    account_info = api.get_account()
-    cash_available = float(account_info.cash)
-    day_trade_count = account_info.daytrade_count
-    positions = {position.symbol: float(position.qty) for position in api.list_positions()}
-    return cash_available, day_trade_count, positions
 
 # Main loop
 while True:
