@@ -94,6 +94,14 @@ def calculate_technical_indicators(symbol):
         print(f"Error processing {symbol}: {str(e)}")
         return None
 
+# Function to create sequences for LSTM
+def create_sequences(data, window_size):
+    X, y = [], []
+    for i in range(len(data) - window_size):
+        X.append(data[i:i + window_size])
+        y.append(data[i + window_size, 0])  # Predict next close price
+    return np.array(X), np.array(y)
+
 # Main loop
 while True:
     try:
