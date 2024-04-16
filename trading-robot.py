@@ -202,10 +202,7 @@ def submit_sell_order(symbol, quantity, target_sell_price):
     try:
         position = api.get_position(symbol)
     except Exception as e:
-        print("\n")
-        print(f" {symbol} {e}")
-        print("\n")
-        log_error(f" {symbol} {str(e)}")
+        pass
         return
 
     if position.qty != '0':
