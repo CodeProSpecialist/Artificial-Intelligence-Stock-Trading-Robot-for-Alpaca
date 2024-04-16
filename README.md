@@ -1,6 +1,9 @@
 # Artificial-Intelligence-Stock-Trading-Robot-for-Alpaca
 An Artificial Intelligence Robot for stock trading. 
 
+Update the newest version of this robot because 
+bugs have been removed on 4-16-2024. 
+
 This robot features neural network functionality to train, learn, and make trading decisions.  
 
 This is one of the favorite trading robots of CodeProSpecialist. 
