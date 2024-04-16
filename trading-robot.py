@@ -202,7 +202,11 @@ def submit_sell_order(symbol, quantity, target_sell_price):
     try:
         position = api.get_position(symbol)
     except Exception as e:
-        print(f"Error: {e}")
+        print("\n")
+        print(f"Error: {symbol} {e}")
+        print(" Searching for a previously owned position. Not finding an owned position that was most likely sold. ")
+        print("\n")
+        log_error(f" Searching for a previously owned position. Not finding an owned position that was most likely sold: {str(e)}")
         return
 
     if position.qty != '0':
@@ -349,7 +353,40 @@ while True:
                 submit_buy_order(symbol, 1, target_buy_price)
                 submit_sell_order(symbol, 1, target_sell_price)
 
-        # Wait for next iteration
+        # Get the list of owned positions
+        positions = api.list_positions()
+
+        # Check if there are any positions
+        if not positions:
+            print("\n")
+            print("No positions currently owned.")
+            print("\n")
+        else:
+            # Print the list of owned positions and their prices
+            print("\n")
+            print("Owned Stock Positions:")
+            print("\n")
+            for position in positions:
+                symbol = position.symbol
+                quantity = position.qty
+                avg_price = float(position.avg_entry_price)
+
+                # Get the current price of the stock
+                current_price = get_current_price(symbol)
+                percentage_change = ((current_price - avg_price) / avg_price) * 100
+
+                if percentage_change:
+                    print("\n")
+                    print(f"{symbol} | {quantity} | {avg_price:.2f} | Price Change: {percentage_change:.2f}%")
+                    print("\n")
+                else:
+                    print("\n")
+                    print(f"{symbol} | {quantity} | {avg_price:.2f}")
+                    print("\n")
+
+        print("\n")
+
+        # Wait for next main loop restart
         print("\n")
         print("Waiting 30 seconds.....")
         print("\n")
