@@ -198,9 +198,13 @@ def submit_sell_order(symbol, quantity, target_sell_price):
     day_trade_count = account_info.daytrade_count
 
     current_price = get_current_price(symbol)
-    position = api.get_position(symbol)
     
-    # Check if the position quantity is not zero before submitting the sell order
+    try:
+        position = api.get_position(symbol)
+    except Exception as e:
+        print(f"Error: {e}")
+        return
+
     if position.qty != '0':
         bought_price = float(position.avg_entry_price)
 
