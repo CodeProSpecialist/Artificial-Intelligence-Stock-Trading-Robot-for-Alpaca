@@ -203,10 +203,9 @@ def submit_sell_order(symbol, quantity, target_sell_price):
         position = api.get_position(symbol)
     except Exception as e:
         print("\n")
-        print(f"Error: {symbol} {e}")
-        print(" Searching for a previously owned position. Not finding an owned position that was most likely sold. ")
+        print(f" {symbol} {e}")
         print("\n")
-        log_error(f" Searching for a previously owned position. Not finding an owned position that was most likely sold: {str(e)}")
+        log_error(f" {symbol} {str(e)}")
         return
 
     if position.qty != '0':
@@ -365,7 +364,7 @@ while True:
             # Print the list of owned positions and their prices
             print("\n")
             print("Owned Stock Positions:")
-            print("\n")
+            print("-------------------------------------------------------------------------------------")
             for position in positions:
                 symbol = position.symbol
                 quantity = position.qty
@@ -377,13 +376,18 @@ while True:
 
                 if percentage_change:
                     print("\n")
+                    print("Ticker Symbol | Quantity | Avg. Price |  ")
+                    print("\n")
                     print(f"{symbol} | {quantity} | {avg_price:.2f} | Price Change: {percentage_change:.2f}%")
                     print("\n")
+                    print("-------------------------------------------------------------------------------------")
                 else:
+                    print("\n")
+                    print("Ticker Symbol | Quantity | Avg. Price |  ")
                     print("\n")
                     print(f"{symbol} | {quantity} | {avg_price:.2f}")
                     print("\n")
-
+                    print("-------------------------------------------------------------------------------------")
         print("\n")
 
         # Wait for next main loop restart
