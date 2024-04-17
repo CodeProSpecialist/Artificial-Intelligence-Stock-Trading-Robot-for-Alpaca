@@ -10,6 +10,28 @@ This is one of the favorite trading robots of CodeProSpecialist.
 You will need at least a recommended 25 to 50 Gigabytes of free space 
 on your hard drive when installing the dependencies for this robot. 
 
+How does this robot work?
+
+This stock trading bot buys stocks based on a target buy price, which is calculated as ( lowest_price * 1.11 ) 11% above the lowest price observed over the last 14 days. Here's how it works:
+
+Calculate Technical Indicators: The bot fetches historical data for the last 14 days for each stock in the list. It then calculates technical indicators such as MACD, RSI, and volume.
+Preprocess Data: The historical data is preprocessed, which includes handling NaN values and scaling the data using Min-Max scaling.
+Create Sequences for LSTM: The preprocessed data is divided into input sequences (X) and corresponding output values (y) for training the LSTM model.
+Train LSTM Model: The LSTM model is either loaded from a saved file or created if it doesn't exist. The model is trained using the input sequences (X_train) and output values (y_train).
+Make Predictions: The trained LSTM model is used to predict the target buy price and target sell price.
+Submit Buy and Sell Orders: If the current price is below the target buy price and there's enough cash available, a buy order is submitted. If the current price is above the target sell price and certain conditions are met (such as not exceeding the day trade limit), a sell order is submitted.
+Wait and Repeat: After processing all stocks in the list, the bot waits for 30 seconds before starting the next iteration of the main loop.
+Overall, the bot uses LSTM-based machine learning to predict buy and sell prices, with target buy prices being determined based on historical lows plus a percentage increase.
+Is the LSTM model actually being used in the robot?
+
+Yes, the LSTM model is being used in the robot. Here's how it's utilized:
+
+Training the LSTM Model: The LSTM model is trained using historical data to learn patterns and relationships between various technical indicators and stock prices.
+Making Predictions: Once the model is trained, it's used to make predictions on unseen data (test data) to forecast the target buy price and target sell price for each stock.
+Submitting Orders: Based on the predictions made by the LSTM model, the robot decides whether to submit buy or sell orders for each stock.
+Saving and Loading the Model: The trained LSTM model is saved to disk after training and loaded back when needed, ensuring that the model's learning is persistent across different runs of the program.
+So, yes, the LSTM model plays a crucial role in the decision-making process of the stock trading robot.
+
 Disclaimer:
 
 This software is not affiliated with or endorsed Alpaca Securities, LLC. It aims to be a valuable tool for stock market trading, but all trading involves risks. Use it responsibly and consider seeking advice from financial professionals.
