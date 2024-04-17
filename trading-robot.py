@@ -260,7 +260,7 @@ while True:
 
         cash_balance = round(float(api.get_account().cash), 2)
 
-        percent_to_add_to_low_buy_price = 1.07    # 1.07 is the default setting ( + 7% )
+        percent_to_add_to_low_buy_price = 1.00    # 1.00 is the default setting ( + 0% change )
 
         percent_to_subtract_from_high_sell_price = 0.985  # Factor to reduce the sell price by 1.5%
 
