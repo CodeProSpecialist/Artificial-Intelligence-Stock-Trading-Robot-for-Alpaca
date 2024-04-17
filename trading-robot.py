@@ -335,7 +335,7 @@ while True:
                 with torch.no_grad():
                     predictions = model(torch.tensor(X_test, dtype=torch.float32))
 
-                percent_to_add_to_low_buy_price = 1.01    # 1.01 is +1.00%
+                percent_to_add_to_low_buy_price = 1.11    # 1.11 is the default setting
                 # Get target buy price and target sell price
                 target_buy_price = np.min(historical_data['Low']) * percent_to_add_to_low_buy_price
 
