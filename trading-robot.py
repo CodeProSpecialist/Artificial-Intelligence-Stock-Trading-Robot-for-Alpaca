@@ -259,6 +259,11 @@ while True:
         current_time_str = now.strftime("Eastern Time | %I:%M:%S %p | %m-%d-%Y |")
 
         cash_balance = round(float(api.get_account().cash), 2)
+
+        percent_to_add_to_low_buy_price = 1.07    # 1.07 is the default setting ( + 7% )
+
+        percent_to_subtract_from_high_sell_price = 0.985  # Factor to reduce the sell price by 1.5%
+
         print("------------------------------------------------------------------------------------")
         print(" 2024 Edition of the Artificial Intelligence Stock Trading Robot ")
         print("by https://github.com/CodeProSpecialist")
@@ -268,11 +273,17 @@ while True:
         print("\n")
         print(f"Current day trade number: {day_trade_count} out of 3 in 5 business days")
         print("\n")
-
+        print("To fine tune the buying and selling prices, ")
+        print("make sure to fine tune the file trading-robot.py to change the value of the following ")
+        print("in the python code lines 263 and 265: ")
+        print(f" percent_to_add_to_low_buy_price = {percent_to_add_to_low_buy_price} ")
+        print("\n")
+        print(f" percent_to_subtract_from_high_sell_price = {percent_to_subtract_from_high_sell_price} ")
         print("------------------------------------------------------------------------------------")
         print("\n")
 
-        window_size = 10  # Example window size for LSTM
+        window_size = 8  # Example window size for LSTM
+        input_size = 8    #number of brain model inputs for training data categories
 
         # Get the list of stock symbols to trade
         symbols = get_stocks_to_trade()
@@ -335,11 +346,10 @@ while True:
                 with torch.no_grad():
                     predictions = model(torch.tensor(X_test, dtype=torch.float32))
 
-                percent_to_add_to_low_buy_price = 1.11    # 1.11 is the default setting
                 # Get target buy price and target sell price
                 target_buy_price = np.min(historical_data['Low']) * percent_to_add_to_low_buy_price
 
-                target_sell_price = np.max(historical_data['High'])
+                target_sell_price = np.max(historical_data['High']) * percent_to_subtract_from_high_sell_price
 
                 print("\n")
                 # Print target buy and sell prices

@@ -12,7 +12,16 @@ on your hard drive when installing the dependencies for this robot.
 
 How does this robot work?
 
-This stock trading bot buys stocks based on a target buy price, which is calculated as ( lowest_price * 1.11 ) 11% above the lowest price observed over the last 14 days. Here's how it works:
+Begin by fine tuning the buying and selling prices from the past 14 days of historical price data. 
+
+
+        Make sure to fine tune the file trading-robot.py to change the value of the following 
+        in the python code lines 263 and 265: 
+         percent_to_add_to_low_buy_price = 1.07    # 1.07 is the default setting ( + 7% )
+        
+         percent_to_subtract_from_high_sell_price = 0.985  # Factor to reduce the sell price by 1.5%
+
+This stock trading bot buys stocks based on a target buy price, which is calculated as ( lowest_price * 1.07 ) 7% above the lowest price observed over the last 14 days. Here's how it works:
 
 Calculate Technical Indicators: The bot fetches historical data for the last 14 days for each stock in the list. It then calculates technical indicators such as MACD, RSI, and volume.
 Preprocess Data: The historical data is preprocessed, which includes handling NaN values and scaling the data using Min-Max scaling.
