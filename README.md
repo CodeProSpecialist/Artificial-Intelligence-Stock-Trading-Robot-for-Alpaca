@@ -13,6 +13,8 @@ on your hard drive when installing the dependencies for this robot.
 -------------------------------
 You should not be the root user when installing the Python software in a virtual environment. 
 
+Your Python commands in the directory named My-Python-Virtual-Environment-Packages will be the Python commands that run this installed virtual environment's Python programs. 
+
 To setup and run this robot:
 
 sh install.sh
