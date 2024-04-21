@@ -14,11 +14,7 @@ on your hard drive when installing the dependencies for this robot.
 
 To setup and run this robot:
 
-as root user:
-
 sh install.sh
-
-as non-root user:
 
 python3 trading-robot.py
 
