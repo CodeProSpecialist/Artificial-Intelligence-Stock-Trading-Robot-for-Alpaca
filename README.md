@@ -11,6 +11,7 @@ You will need at least a recommended 25 to 50 Gigabytes of free space
 on your hard drive when installing the dependencies for this robot. 
 
 -------------------------------
+You should not be the root user when installing the Python software in a virtual environment. 
 
 To setup and run this robot:
 
