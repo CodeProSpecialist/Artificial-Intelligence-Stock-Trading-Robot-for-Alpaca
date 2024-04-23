@@ -6,3 +6,4 @@ SLV
 SIVR
 IAU
 GLD
+GDXJ
