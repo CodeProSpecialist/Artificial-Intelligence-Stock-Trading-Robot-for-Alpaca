@@ -179,13 +179,14 @@ def load_or_create_model(filename, input_size):
 
 # Function to submit buy order
 def submit_buy_order(symbol, quantity, target_buy_price):
-    # Convert symbol from BRK-B to BRK.B if necessary
-    symbol = symbol.replace('-', '.')
     account_info = api.get_account()
     cash_available = float(account_info.cash)
     current_price = get_current_price(symbol)
 
     if current_price <= target_buy_price and cash_available >= current_price:
+        # Convert symbol from BRK-B to BRK.B if necessary
+        symbol = symbol.replace('-', '.')
+
         api.submit_order(
             symbol=symbol,
             qty=quantity,
@@ -194,6 +195,7 @@ def submit_buy_order(symbol, quantity, target_buy_price):
             time_in_force='gtc'
         )
         print(f"Bought {quantity} shares of {symbol} at ${current_price:.2f}")
+
 
 def submit_sell_order(symbol, quantity, target_sell_price):
     account_info = api.get_account()
