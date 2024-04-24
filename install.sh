@@ -30,4 +30,7 @@ pip3 install yfinance numpy scikit-learn alpaca-trade-api pytz ta-lib torch torc
 
 # Inform the user about Anaconda installation
 echo "Your Python commands will be the Python commands that run with Anaconda's Python programs."
-echo "You can activate Anaconda by running 'conda activate' and then install anything else with pip."
+echo "You can activate Anaconda by running 'conda activate' and then install anything else with pip3 ."
+
+# Inform the user about the virtual environment
+echo "Your Python commands in the directory for Anaconda will be the Python commands that run this installed virtual environment's Python programs."
