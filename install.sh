@@ -14,23 +14,36 @@ sudo apt-get install libatlas-base-dev gfortran -y
 echo "Downloading TA-Lib..."
 wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
 tar -xzvf ta-lib-0.4.0-src.tar.gz
+
 cd ta-lib/
 echo "Configuring TA-Lib..."
-./configure --prefix=/usr
+./configure --prefix=/usr/local --build=x86_64-unknown-linux-gnu
+echo "Building TA-Lib..."
+sudo make -s ARCH=x86_64
 echo "Installing TA-Lib..."
-make
-sudo make install
+sudo make -s ARCH=x86_64 install
+
+# For Raspberry Pi 4 (aarch64):
+# ./configure --prefix=/usr/local --build=aarch64-unknown-linux-gnu
+# sudo make -s ARCH=aarch64
+# sudo make -s ARCH=aarch64 install
+
 cd ..
 rm -r ta-lib
 rm ta-lib-0.4.0-src.tar.gz
 
-# Update Python packages using Anaconda's pip (assuming Anaconda is already installed)
+# Initialize conda
+conda init bash
+
+# Activate Anaconda environment
 conda activate
+
+# Update Python packages using Anaconda's pip
 pip3 install yfinance numpy scikit-learn alpaca-trade-api pytz ta-lib torch torchvision
 
 # Inform the user about Anaconda installation
 echo "Your Python commands will be the Python commands that run with Anaconda's Python programs."
-echo "You can activate Anaconda by running 'conda activate' and then install anything else with pip3 ."
+echo "You can install anything else with pip3 ."
 
 # Inform the user about the virtual environment
 echo "Your Python commands in the directory for Anaconda will be the Python commands that run this installed virtual environment's Python programs."
