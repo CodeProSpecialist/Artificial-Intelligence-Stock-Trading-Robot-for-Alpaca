@@ -29,7 +29,7 @@ sudo make -s ARCH=x86_64 install
 # sudo make -s ARCH=aarch64 install
 
 cd ..
-rm -r ta-lib
+sudo rm -r -f -I ta-lib
 rm ta-lib-0.4.0-src.tar.gz
 
 # Initialize conda
