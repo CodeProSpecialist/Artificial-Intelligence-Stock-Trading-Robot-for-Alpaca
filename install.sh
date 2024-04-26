@@ -3,6 +3,22 @@
 # Update package list
 sudo apt update
 
+# Prompt the user
+echo "We need to remove pip and pip3 before installing Anaconda. "
+echo "Uninstall python-pip and python3-pip? (y/n)"
+read response
+
+# Check the response
+if [ "$response" = "y" ]; then
+  # Uninstall the packages as root
+  sudo apt purge python-pip python3-pip
+else
+  echo "Uninstallation cancelled"
+  exit 1
+fi
+
+sudo apt update
+
 # Install required packages
 sudo apt install -y libhdf5-dev
 
