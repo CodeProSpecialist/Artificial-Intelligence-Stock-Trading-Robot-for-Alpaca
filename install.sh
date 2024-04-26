@@ -4,7 +4,8 @@
 sudo apt update
 
 # Prompt the user
-echo "We need to remove pip and pip3 before installing Anaconda. "
+echo "We need to remove the local Linux pip and pip3 before installing. "
+echo "( we are using Anaconda's pip3 to install Python3 packages.) "
 echo "Uninstall python-pip and python3-pip? (y/n)"
 read response
 
