@@ -62,7 +62,7 @@ conda init bash
 conda activate
 
 # Update Python packages using Anaconda's pip
-pip3 install yfinance numpy scikit-learn alpaca-trade-api pytz ta-lib torch torchvision
+pip3 install pytz numpy scipy yfinance ta-lib alpaca-trade-api scikit-learn torch torchvision
 
 # Inform the user about Anaconda installation
 echo "Your Python commands will be the Python commands that run with Anaconda's Python programs."
