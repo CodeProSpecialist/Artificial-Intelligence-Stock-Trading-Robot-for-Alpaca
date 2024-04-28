@@ -73,6 +73,10 @@ echo "Your Python commands in the directory for Anaconda will be the Python comm
 
 echo "type:   conda activate  " 
 
-echo "type:    pip3 install yfinance numpy scikit-learn alpaca-trade-api pytz ta-lib torch torchvision"
+echo "type:    pip3 install numpy scipy pytz ta-lib alpaca-trade-api yfinance scikit-learn torch torchvision"
+
+echo "View the installed pip3 packages with the command: pip3 list  "
+
+echo "I have found that pip3 will prefer to install 1 package at a time. Try this. "
 
 echo "Then the python 3 packages installation is complete. "
