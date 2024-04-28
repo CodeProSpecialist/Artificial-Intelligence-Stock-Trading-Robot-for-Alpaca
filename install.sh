@@ -62,7 +62,23 @@ conda init bash
 conda activate
 
 # Update Python packages using Anaconda's pip
-pip3 install pytz numpy scipy yfinance ta-lib alpaca-trade-api scikit-learn torch torchvision
+pip3 install pytz 
+
+pip3 install numpy 
+
+pip3 install scipy 
+
+pip3 install yfinance 
+
+pip3 install ta-lib 
+
+pip3 install alpaca-trade-api 
+
+pip3 install scikit-learn 
+
+pip3 install torch 
+
+pip3 install torchvision
 
 # Inform the user about Anaconda installation
 echo "Your Python commands will be the Python commands that run with Anaconda's Python programs."
@@ -73,7 +89,7 @@ echo "Your Python commands in the directory for Anaconda will be the Python comm
 
 echo "type:   conda activate  " 
 
-echo "type:    pip3 install numpy scipy pytz ta-lib alpaca-trade-api yfinance scikit-learn torch torchvision"
+echo "type:    pip3 install pytz numpy scipy yfinance ta-lib alpaca-trade-api scikit-learn torch torchvision"
 
 echo "View the installed pip3 packages with the command: pip3 list  "
 
