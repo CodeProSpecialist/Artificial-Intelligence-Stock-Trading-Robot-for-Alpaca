@@ -109,6 +109,7 @@ def preprocess_data(data):
 # Function to calculate MACD, RSI, and Volume for the last 14 days
 def calculate_technical_indicators(symbol):
     try:
+        symbol = symbol.replace('.', '-')  # Replace '.' with '-'
         stock_data = yf.Ticker(symbol)
         historical_data = stock_data.history(period='14d')  # Fetch data for the last 14 days
 
