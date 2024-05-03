@@ -24,6 +24,7 @@ api = tradeapi.REST(API_KEY_ID, API_SECRET_KEY, API_BASE_URL)
 
 
 def get_current_price(symbol):
+    symbol = symbol.replace('.', '-')  # Replace '.' with '-'
     stock_data = yf.Ticker(symbol)
     return round(stock_data.history(period='1d')['Close'].iloc[0], 4)
 
